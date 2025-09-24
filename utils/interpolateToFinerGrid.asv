@@ -1,0 +1,39 @@
+function f = interpolateToFinerGrid(grid, xgrid, Raux)
+% INTERPOLATETOFINERGRID Interpolates value matrices from a coarse to a finer grid.
+%
+%   Used for interpolating value functions defined over a coarse asset grid
+%   (e.g., after migration or continuation values) onto a finer grid for
+%   asset choice optimization.
+%
+%   INPUTS:
+%       grid   - [Na x 1] coarse grid (e.g., agrid)
+%       xgrid  - [na x 1] finer grid (e.g., ahgrid)
+%       Raux   - [K x Na x N] or [K x Na x N x ...] value matrix
+%                where the 2nd dimension corresponds to asset levels
+%
+%   OUTPUT:
+%       f      - [K x 1 x N x na] interpolated value matrix,
+%                ready to be added to utility and optimized over asset choices
+%
+%   AUTHOR: Agustin Deambrosi
+%   LAST REVISED: April 2025
+% =========================================================================
+
+    %% 1. Move asset grid dimension to front for interpolation
+    Raux			= permute(Raux, [3, 1, 2, 4, 5]);  % [Na x S x K x N x 1 (created) ]
+
+    %% 2. Flatten all other dimensions for batch interpolation
+    sz				= size(Raux);                  % Save original size
+    Rflat			= reshape(Raux, sz(1), []);     % [Na x (S*K*N*...)]
+    
+    %% 3. Interpolate using linear method + extrapolation
+    Rinterp			= interp1(grid, Rflat, xgrid, 'linear', 'extrap');  % [na x (K*N*1)]
+    
+    %% 4. Reshape back to multi-dimensional form
+    sz(1)			= length(xgrid);               % Replace Na with na
+    Rreshaped		= reshape(Rinterp, sz);         % [na x S x K x N x 1 ]
+
+    %% 5. Reorder to [S x K x 1 x N x na] for compatibility with maximization
+    f				= permute(Rreshaped, [2, 3, 5, 4, ]);
+
+end

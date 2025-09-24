@@ -1,0 +1,32 @@
+function m0 = createInitialDistribution(dims, settings)
+% CREATEINITIALDISTRIBUTION Generates initial agent distribution over states.
+%
+%   OUTPUT:
+%       m0 - [Nagents x 1] struct array with fields:
+%               .state     - Productivity state index (1 to dims.K)
+%               .wealth    - Wealth index on coarse grid (1 to length(grids.agrid))
+%               .location  - Location index (initialized to 1 for all agents)
+%
+%   INPUTS:
+%       dims     - Struct with dimension info (K: productivity states, N: locations)
+%       settings - Struct with simulation control (Nagents: number of agents)
+%       grids    - Struct containing:
+%                     .agrid : Coarse asset grid (vector of size Na)
+%
+%   AUTHOR: Agustin Deambrosi
+%   LAST REVISED: April 2025
+% =========================================================================
+
+    numAgents	= settings.Nagents;
+
+    % Preallocate agent structure
+    m0			= repmat(struct('state', 0, 'wealth', 0, 'location', 0), numAgents, 1);
+
+    % Randomly assign state and wealth to each agent; fix location to 1
+    for i = 1:numAgents
+        m0(i).state		= randi(dims.H);        % Productivity state index
+        m0(i).wealth	= randi(dims.Na);     % Asset index on coarse grid
+        m0(i).location	= 1;                    % All agents start in location 1
+    end
+
+end
