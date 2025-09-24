@@ -23,6 +23,7 @@ function matrices = constructMatrix(dims, params, grids, indexes)
 %       .Ue        Utility from feasible consumption (−∞ for infeasible).
 %       .a_prime   Assets net of migration costs (S×K×Na×N×N×H).
 %       .mig_costs Raw effective migration costs τ^{iℓ}(h) (N×N×H).
+%       .Hbin      Binary help matrix enumerating h (H×N).
 %       .P         Transition operator for (employment × ψ),
 %                  shape S×K×K×N (built via build_P).
 %
@@ -70,7 +71,7 @@ function matrices = constructMatrix(dims, params, grids, indexes)
 
     %% 2. After-migration wealth -------------------------------------------------
     % Effective migration cost tensor: τ^{iℓ}(h), N×N×H
-    mig_costs = build_tau_eff(dims, params);
+    [mig_costs, Hbin] = build_tau_eff(dims, params);
 
     % Expand to match (S,K,Na,N,N,H) dimensions:
     %   permute to add singleton skill/asset/state dimensions,
@@ -89,5 +90,6 @@ function matrices = constructMatrix(dims, params, grids, indexes)
     matrices.Ue        = Ue;
     matrices.a_prime   = a_prime;
     matrices.mig_costs = mig_costs;
+    matrices.Hbin      = Hbin;
 
 end

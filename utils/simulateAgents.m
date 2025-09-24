@@ -1,10 +1,12 @@
-function [M_history, MIN_history, agentData] = simulateAgents(m0, pol, G_dist, dims, params, grids, matrices, settings)
+function [M_history, MIN_history, agentData, flowLog] = simulateAgents(m0, pol, G_dist, dims, params, grids, matrices, settings)
 % SIMULATEAGENTS  Simulate agent evolution over T periods using policy paths.
 %
-%   [M_HISTORY, MIN_HISTORY, AGENTDATA] = SIMULATEAGENTS(M0, POL, G_DIST, DIMS, PARAMS, GRIDS, MATRICES, SETTINGS)
+%   [M_HISTORY, MIN_HISTORY, AGENTDATA] = SIMULATEAGENTS(M0, POL, G_DIST, ...)
 %   simulates the dynamic paths of agents given time-varying policy functions
 %   and help-offer distributions. It returns total location shares, networked
-%   shares, and individual trajectories.
+%   shares, and individual trajectories. When a fourth output is requested, the
+%   function also logs migration-flow diagnostics (help usage and direct-from-
+%   origin moves) without affecting existing calls.
 %
 %   INPUTS
 %   ------
@@ -48,6 +50,9 @@ function [M_history, MIN_history, agentData] = simulateAgents(m0, pol, G_dist, d
 %                   .state    [Nagents×T]
 %                   .network  [Nagents×T]
 %                   .skill    [Nagents×1]
+%   flowLog     : (optional) struct with migration-flow flags (only if requested)
+%                   .helpUsed       [Nagents×T] logical, true when moved with help
+%                   .directFromVzla [Nagents×T] logical, true when moved from origin
 %
 %   NOTES
 %   -----
@@ -60,9 +65,10 @@ function [M_history, MIN_history, agentData] = simulateAgents(m0, pol, G_dist, d
 % ======================================================================
 
     %% 1) Setup ------------------------------------------------------------
-    T       = settings.T;
-    Nagents = settings.Nagents;
-    N       = dims.N;
+    T         = settings.T;
+    Nagents   = settings.Nagents;
+    N         = dims.N;
+    logFlows  = nargout >= 4;
 
     % Accept either time-varying (cell) or fixed (numeric) policies
     isTimeInvariant = ~iscell(pol.a);
@@ -74,8 +80,13 @@ function [M_history, MIN_history, agentData] = simulateAgents(m0, pol, G_dist, d
     end
 
     % (z,ψ) transition and effective migration costs (precomputed in MATRICES)
-    P_local  = matrices.P;         % [S×K×K×N]
-    mig_costs = matrices.mig_costs; % [N×N×H]
+    P_local   = matrices.P;          % [S×K×K×N]
+    mig_costs = matrices.mig_costs;  % [N×N×H]
+    if logFlows && isfield(matrices, 'Hbin')
+        Hbin = matrices.Hbin;        % [H×N]
+    else
+        Hbin = [];
+    end
 
     %% 2) Preallocate trajectories ----------------------------------------
     locationTraj = zeros(Nagents, T, 'uint16');
@@ -83,6 +94,10 @@ function [M_history, MIN_history, agentData] = simulateAgents(m0, pol, G_dist, d
     stateTraj    = zeros(Nagents, T, 'uint16');   % K-index
     networkTraj  = zeros(Nagents, T, 'uint8');
     skillTraj    = zeros(Nagents, 1, 'uint16');   % skill fixed
+    if logFlows
+        helpUsedTraj   = false(Nagents, T);
+        directVzlaTraj = false(Nagents, T);
+    end
 
     %% 3) Simulation loop --------------------------------------------------
     parfor agentIdx = 1:Nagents
@@ -100,6 +115,10 @@ function [M_history, MIN_history, agentData] = simulateAgents(m0, pol, G_dist, d
         weaHist = zeros(1, T, 'uint16');
         staHist = zeros(1, T, 'uint16');
         netHist = zeros(1, T, 'uint8');
+        if logFlows
+            helpHist   = false(1, T);
+            directHist = false(1, T);
+        end
 
         locHist(1) = loc;
         weaHist(1) = wea;
@@ -154,7 +173,15 @@ function [M_history, MIN_history, agentData] = simulateAgents(m0, pol, G_dist, d
             end
 
             %% C) Wealth and K-state transition
-            if nextLoc ~= loc
+            moved = nextLoc ~= loc;
+
+            if logFlows && moved
+                helpFlag = (net == 1) && ~isempty(Hbin) && Hbin(double(h_idx), double(nextLoc)) == 1;
+                helpHist(t+1)   = helpFlag;
+                directHist(t+1) = (loc == 1);
+            end
+
+            if moved
                 % Pay migration cost (depends on help vector)
                 migCost = mig_costs(loc, nextLoc, h_idx);
                 newA    = grids.agrid(nextWea) - migCost;
@@ -215,6 +242,10 @@ function [M_history, MIN_history, agentData] = simulateAgents(m0, pol, G_dist, d
         stateTraj(  agentIdx, :)  = staHist;
         networkTraj(agentIdx, :)  = netHist;
         skillTraj(  agentIdx, 1)  = ski;
+        if logFlows
+            helpUsedTraj(agentIdx, :)   = helpHist;
+            directVzlaTraj(agentIdx, :) = directHist;
+        end
     end
 
     %% 4) Aggregate location histories -----------------------------------
@@ -235,4 +266,10 @@ function [M_history, MIN_history, agentData] = simulateAgents(m0, pol, G_dist, d
     agentData.state    = stateTraj;
     agentData.network  = networkTraj;
     agentData.skill    = skillTraj;
+    if logFlows
+        flowLog.helpUsed       = helpUsedTraj;
+        flowLog.directFromVzla = directVzlaTraj;
+    else
+        flowLog = [];
+    end
 end
