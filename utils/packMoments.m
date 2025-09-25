@@ -76,6 +76,7 @@ function [mvec, map] = packMoments(mom, dims, settings)
     tenure_blocks = [];
     tenure_map    = cell(N, 1);
     Dmax = mom.Dmax;
+    cursor = idx_start;
     for i = 1:N
         ten_u = mom.tenure_unemp_id{i};
         ten_w = mom.tenure_avg_wage_id{i};
@@ -86,15 +87,17 @@ function [mvec, map] = packMoments(mom, dims, settings)
             ten_w = nan(Dmax + 1, 1);
         end
         stack_i = [ten_u(:); ten_w(:)];
-        tenure_map{i} = struct('location', i, 'start', idx_start + numel(tenure_blocks), ...
-            'stop', idx_start + numel(tenure_blocks) + numel(stack_i) - 1, ...
-            'length', numel(stack_i));
+        len_i   = numel(stack_i);
+        start_i = cursor;
+        stop_i  = cursor + len_i - 1;
+        tenure_map{i} = struct('location', i, 'start', start_i, ...
+            'stop', stop_i, 'length', len_i);
         tenure_blocks = [tenure_blocks; stack_i]; %#ok<AGROW>
+        cursor = stop_i + 1;
     end
     blocks{6} = tenure_blocks;
     block_info{6} = struct('name', 'tenure_blocks', 'start', idx_start, ...
-        'stop', idx_start + numel(tenure_blocks) - 1, ...
-        'details', tenure_map);
+        'stop', cursor - 1, 'details', tenure_map);
 
 
     % Concatenate blocks
