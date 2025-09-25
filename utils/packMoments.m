@@ -95,7 +95,7 @@ function [mvec, map] = packMoments(mom, dims, settings)
     block_info{6} = struct('name', 'tenure_blocks', 'start', idx_start, ...
         'stop', idx_start + numel(tenure_blocks) - 1, ...
         'details', tenure_map);
-    idx_start = block_info{6}.stop + 1;
+
 
     % Concatenate blocks
     fullvec = vertcat(blocks{:});

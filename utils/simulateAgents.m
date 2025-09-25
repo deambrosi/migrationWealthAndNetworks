@@ -7,7 +7,6 @@ function [M_history, MIN_history, agentData, flowLog] = simulateAgents(m0, pol, 
 %   shares, and individual trajectories. When a fourth output is requested, the
 %   function also logs migration-flow diagnostics (help usage and direct-from-
 %   origin moves) without affecting existing calls.
-%
 %   INPUTS
 %   ------
 %   m0      : [Nagents × 1] struct array of initial agent states with fields:
@@ -70,6 +69,7 @@ function [M_history, MIN_history, agentData, flowLog] = simulateAgents(m0, pol, 
     N         = dims.N;
     logFlows  = nargout >= 4;
 
+
     % Accept either time-varying (cell) or fixed (numeric) policies
     isTimeInvariant = ~iscell(pol.a);
     if isTimeInvariant
@@ -80,6 +80,7 @@ function [M_history, MIN_history, agentData, flowLog] = simulateAgents(m0, pol, 
     end
 
     % (z,ψ) transition and effective migration costs (precomputed in MATRICES)
+
     P_local   = matrices.P;          % [S×K×K×N]
     mig_costs = matrices.mig_costs;  % [N×N×H]
     if logFlows && isfield(matrices, 'Hbin')
@@ -99,6 +100,7 @@ function [M_history, MIN_history, agentData, flowLog] = simulateAgents(m0, pol, 
         directVzlaTraj = false(Nagents, T);
     end
 
+
     %% 3) Simulation loop --------------------------------------------------
     parfor agentIdx = 1:Nagents
         % --- Initialize agent ---
@@ -115,10 +117,9 @@ function [M_history, MIN_history, agentData, flowLog] = simulateAgents(m0, pol, 
         weaHist = zeros(1, T, 'uint16');
         staHist = zeros(1, T, 'uint16');
         netHist = zeros(1, T, 'uint8');
-        if logFlows
-            helpHist   = false(1, T);
-            directHist = false(1, T);
-        end
+        helpHist   = false(1, T);
+        directHist = false(1, T);
+
 
         locHist(1) = loc;
         weaHist(1) = wea;
@@ -174,7 +175,6 @@ function [M_history, MIN_history, agentData, flowLog] = simulateAgents(m0, pol, 
 
             %% C) Wealth and K-state transition
             moved = nextLoc ~= loc;
-
 
             if logFlows
                 helpFlag   = false;
@@ -279,3 +279,4 @@ function [M_history, MIN_history, agentData, flowLog] = simulateAgents(m0, pol, 
         flowLog = [];
     end
 end
+

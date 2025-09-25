@@ -102,7 +102,6 @@ function [mvec, out] = SimulatedMoments(x, opt)
         agentData = rmfield(agentData, 'flowLog');
     end
 
-
     [mvec, map] = packMoments(moments, dims, settings);
 
     %% 7) Pack outputs -------------------------------------------------------
