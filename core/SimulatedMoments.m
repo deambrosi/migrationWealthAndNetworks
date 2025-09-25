@@ -82,10 +82,9 @@ function [mvec, out] = SimulatedMoments(x, opt)
 
     M0          = zeros(dims.N, settings.T);
     M0(1, :)    = 1;
-    M0(1, 1)    = 1;   % explicit first-period anchor (redundant with previous line)
 
     [pol_eqm, M_eqm] = solveDynamicEquilibrium(M0, vf_nh, m0, ...
-        dims, params, grids, indexes, matrices, settings); %#ok<ASGLU>
+        dims, params, grids, indexes, matrices, settings); 
 
     %% 5) Help path and simulation -------------------------------------------
     G_dist = computeG(M_eqm, params.ggamma);                  % [H×T]

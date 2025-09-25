@@ -51,7 +51,7 @@ function m0 = createInitialDistribution(dims, settings)
     % Initialize each agent
     for i = 1:numAgents
         m0(i).skill    = randi(dims.S);   % Random skill type
-        m0(i).state    = randi(dims.K);   % Random (employment × ψ) state
+        m0(i).state    = 1;               % Random (employment × ψ) state
         m0(i).wealth   = randi(dims.Na);  % Random asset index on coarse grid
         m0(i).location = 1;               % All start in Venezuela (location 1)
         m0(i).network  = 1;               % All start network-affiliated

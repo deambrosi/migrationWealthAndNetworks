@@ -35,6 +35,9 @@ function mom = computeSimulatedMoments(agentData, M_total, M_network, dims, para
 
     A_vals      = params.A(locTraj);
     theta_vals  = zeros(size(locTraj));
+    skillMat    = repmat(skillVec, 1, T);
+
+    
     for s = 1:S
         idx_s = (skillVec == s);
         if any(idx_s)

@@ -65,10 +65,12 @@ function params = SetParameters(dims, x)
 
     %% Location-specific features
     params.A       = (1:dims.N)';         % Productivity by location (wage shifters)
+    params.A(1)    = 0.2; 
     params.B       = ones(dims.N, 1);     % Amenities by location
+    params.B(1)    = 0.1;    
 
     % Skill premia: expand across S×N
-    params.theta_s = repmat(1:dims.N, dims.S, 1);  
+    params.theta_s = repmat(1:dims.S', dims.N, 1);  
     params.theta_k = 2;                   % Returns to human capital in wages
 
     % Income flows
