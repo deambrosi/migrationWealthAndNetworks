@@ -38,7 +38,9 @@ function mom = computeSimulatedMoments(agentData, M_total, M_network, dims, para
     for s = 1:S
         idx_s = (skillVec == s);
         if any(idx_s)
-            theta_vals(idx_s, :) = params.theta_s(s, locTraj(idx_s, :));
+            theta_row = params.theta_s(s, :);
+            theta_idx = locTraj(idx_s, :);
+            theta_vals(idx_s, :) = reshape(theta_row(theta_idx), sum(idx_s), T);
         end
     end
     wage_vals = A_vals .* theta_vals .* (1 + psi_vals) .^ params.theta_k;

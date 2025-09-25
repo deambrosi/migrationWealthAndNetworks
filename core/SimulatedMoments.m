@@ -93,10 +93,15 @@ function [mvec, out] = SimulatedMoments(x, opt)
         m0, pol_eqm, G_dist, dims, params, grids, matrices, settings);
 
     %% 6) Compute simulated moments -----------------------------------------
-    agentData.flowLog = flowLog;  % attach for moment construction
-    moments           = computeSimulatedMoments(agentData, M_total, M_network, ...
+    if ~isempty(flowLog)
+        agentData.flowLog = flowLog;  % attach for moment construction
+    end
+    moments = computeSimulatedMoments(agentData, M_total, M_network, ...
         dims, params, grids, settings, matrices);
-    agentData = rmfield(agentData, 'flowLog');
+    if isfield(agentData, 'flowLog')
+        agentData = rmfield(agentData, 'flowLog');
+    end
+
 
     [mvec, map] = packMoments(moments, dims, settings);
 
