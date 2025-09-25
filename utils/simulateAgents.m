@@ -175,6 +175,7 @@ function [M_history, MIN_history, agentData, flowLog] = simulateAgents(m0, pol, 
             %% C) Wealth and K-state transition
             moved = nextLoc ~= loc;
 
+
             if logFlows
                 helpFlag   = false;
                 directFlag = false;
