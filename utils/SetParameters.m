@@ -1,14 +1,18 @@
-function params = SetParameters(dims)
+function params = SetParameters(dims, x)
 % SETPARAMETERS  Initialize structural parameters used in the migration model.
 %
-%   PARAMS = SETPARAMETERS(DIMS) creates a struct with all parameter values
+%   PARAMS = SETPARAMETERS(DIMS, X) creates a struct with all parameter values
 %   that govern preferences, location-specific features, employment dynamics,
-%   migration frictions, and network effects.
+%   migration frictions, and network effects. Optional overrides supplied via X
+%   can adjust a subset of parameters without altering the remaining defaults.
 %
 %   INPUT
 %   -----
 %   dims : struct
 %       Contains dimension settings (fields: S, N, k, K, H, Na, na).
+%   x    : (optional) overrides for selected parameters. Supported forms:
+%          • struct  — fields replace matching entries in PARAMS after validation.
+%          • vector  — numeric vector parsed by APPLY_X_VECTOR (template provided).
 %
 %   OUTPUT
 %   ------
@@ -47,8 +51,12 @@ function params = SetParameters(dims)
 %     .CONS      Scaling constant for calibration.
 %
 %   AUTHOR: Agustín Deambrosi
-%   LAST REVISED: September 2025
+%   LAST REVISED: September 2025 (modified to allow parameter overrides)
 % ======================================================================
+
+    if nargin < 2
+        x = [];
+    end
 
     %% Preferences
     params.bbeta   = 0.996315;   % Discount factor (quarterly)
@@ -94,10 +102,117 @@ function params = SetParameters(dims)
     params.ggamma = 2;     % Elasticity of help probability
     params.cchi   = 0.15;  % Network erosion probability outside Venezuela
 
-    % Help distribution at zero migrant masses (all-zero help vector)
-    params.G0     = computeG(zeros(dims.N,1), params.ggamma);  
-
     %% Calibration constant
     params.CONS   = 1e2;   % Scaling constant for calibration
 
+    %% Apply overrides (optional) ---------------------------------------
+    if isempty(x)
+        params.G0 = computeG(zeros(dims.N,1), params.ggamma);
+        return;
+    elseif isstruct(x)
+        params = apply_struct_overrides(params, dims, x);
+    elseif isnumeric(x)
+        params = apply_x_vector(params, dims, x);
+    else
+        error('SetParameters:InvalidOverride', ...
+            'Override input x must be a struct, numeric vector, or empty.');
+    end
+
+    params.G0 = computeG(zeros(dims.N,1), params.ggamma);
+
+end
+
+%% Local helpers ========================================================
+function params = apply_struct_overrides(params, dims, x)
+% APPLY_STRUCT_OVERRIDES  Replace parameter fields using struct overrides.
+
+    fields = fieldnames(x);
+    for f = 1:numel(fields)
+        name  = fields{f};
+        value = x.(name);
+
+        switch name
+            case {'bbeta', 'aalpha', 'ggamma', 'theta_k'}
+                validateattributes(value, {'numeric'}, {'scalar', 'real', 'finite'}, ...
+                    'SetParameters:apply_struct_overrides', name);
+                params.(name) = value;
+
+            case 'cchi'
+                validateattributes(value, {'numeric'}, {'real', 'finite'}, ...
+                    'SetParameters:apply_struct_overrides', name);
+                if isscalar(value)
+                    params.cchi = value;
+                elseif isequal(size(value), [dims.S, dims.N])
+                    params.cchi = value;
+                elseif isequal(size(value), [1, dims.N])
+                    params.cchi = reshape(value, [1, dims.N]);
+                else
+                    error('SetParameters:SizeMismatch', ...
+                        'Field cchi must be scalar, 1xN, or SxN. Received %s.', mat2str(size(value)));
+                end
+
+            case {'A', 'B', 'up_psi'}
+                expectedSize = [dims.N, 1];
+                validate_size(name, value, expectedSize);
+                params.(name) = reshape(value, expectedSize);
+
+            case 'theta_s'
+                expectedSize = [dims.S, dims.N];
+                validate_size(name, value, expectedSize);
+                params.theta_s = reshape(value, expectedSize);
+
+            case 'f'
+                expectedSize = [dims.S, dims.N, 2];
+                validate_size(name, value, expectedSize);
+                params.f = reshape(value, expectedSize);
+
+            case 'g'
+                expectedSize = [dims.S, dims.N, 2];
+                validate_size(name, value, expectedSize);
+                params.g = reshape(value, expectedSize);
+
+            otherwise
+                % Allow silent ignore for unrecognized fields so estimation code
+                % can pass broader structs without error.
+                continue;
+        end
+    end
+end
+
+function params = apply_x_vector(params, dims, x)
+% APPLY_X_VECTOR  Template for mapping numeric override vector into params.
+%
+%   NOTE: This is provided as a commented template so that estimation code can
+%   define the specific mapping between the vector X and parameter fields.
+%   Uncomment and adapt as needed for the project calibration strategy.
+
+    %#ok<*NASGU>
+    % i = 0;
+    % i = i+1; params.bbeta     = x(i);
+    % i = i+1; params.aalpha    = x(i);
+    % i = i+1; params.ggamma    = x(i);
+    % i = i+1; params.cchi      = x(i);
+    % i = i+1; params.theta_k   = x(i);
+    % i = i+1; params.A         = reshape(x(i+(1:dims.N)), [dims.N, 1]); i = i + dims.N;
+    % ... add additional mappings as required.
+
+    % Currently, no default mapping is applied to avoid unintended overrides.
+    % Implementers should fill in the mapping above when using vector overrides.
+end
+
+function validate_size(name, value, expectedSize)
+% VALIDATE_SIZE  Ensure VALUE matches EXPECTEDSIZE (allowing row/column flips for vectors).
+
+    if isvector(value) && numel(expectedSize) == 2 && any(expectedSize == 1)
+        if numel(value) ~= prod(expectedSize)
+            error('SetParameters:SizeMismatch', ...
+                'Field %s has %d elements but expected %s.', name, numel(value), mat2str(expectedSize));
+        end
+        return;
+    end
+
+    if ~isequal(size(value), expectedSize)
+        error('SetParameters:SizeMismatch', ...
+            'Field %s has size %s but expected %s.', name, mat2str(size(value)), mat2str(expectedSize));
+    end
 end
