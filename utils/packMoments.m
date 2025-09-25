@@ -96,6 +96,7 @@ function [mvec, map] = packMoments(mom, dims, settings)
         'stop', idx_start + numel(tenure_blocks) - 1, ...
         'details', tenure_map);
 
+
     % Concatenate blocks
     fullvec = vertcat(blocks{:});
     nan_mask = isnan(fullvec);
