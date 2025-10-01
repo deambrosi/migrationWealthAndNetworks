@@ -27,27 +27,23 @@ function mom = computeSimulatedMoments(agentData, M_total, M_network, dims, para
     Nagents   = size(locTraj, 1);
     T         = size(locTraj, 2);
 
-    isU = stateTraj <= dims.k;
-    isE = ~isU;
-
-    psi_idx  = mod(stateTraj - 1, dims.k) + 1;
-    psi_vals = grids.psi(psi_idx);
-
     A_vals      = params.A(locTraj);
-    theta_vals  = zeros(size(locTraj));
-    skillMat    = repmat(skillVec, 1, T);
-
     
-    for s = 1:S
-        idx_s = (skillVec == s);
-        if any(idx_s)
-            theta_row = params.theta_s(s, :);
-            theta_idx = locTraj(idx_s, :);
-            theta_vals(idx_s, :) = reshape(theta_row(theta_idx), sum(idx_s), T);
-        end
-    end
-    wage_vals = A_vals .* theta_vals .* (1 + psi_vals) .^ params.theta_k;
-    wage_vals(~isE) = NaN;   % only employed earnings matter for averages
+    % Build [Nagents x T] skill matrix to match locTraj
+    skillMat   = repmat(skillVec, 1, T);
+
+    % Vectorized lookup of theta by (skill, location)
+    theta_vals = params.theta_s(sub2ind([S, N], skillMat, locTraj));
+    
+    % Wages
+    psi_idx    = mod(stateTraj - 1, dims.k) + 1;     % already in your file
+    psi_vals   = grids.psi(psi_idx);
+    wage_vals  = A_vals .* theta_vals .* (1 + psi_vals) .^ params.theta_k;
+    
+    % Only employed earnings matter
+    isU        = stateTraj <= dims.k;
+    isE        = ~isU;
+    wage_vals(~isE) = NaN;  % only employed earnings matter for averages
 
     moved = false(Nagents, T);
     if T >= 2

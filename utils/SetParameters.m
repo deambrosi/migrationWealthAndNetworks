@@ -60,29 +60,48 @@ function params = SetParameters(dims, x)
 
     %% Preferences
     params.bbeta   = 0.996315;   % Discount factor (quarterly)
-    params.xi      = 1.5;        % Utility weight on human capital ψ
+    params.xi      = 0.8;        % Utility weight on human capital ψ
     params.phiH    = 0.3;        % Elasticity of utility w.r.t. ψ
 
     %% Location-specific features
-    params.A       = (1:dims.N)';         % Productivity by location (wage shifters)
+    params.A       = ones(dims.N,1);         % Productivity by location (wage shifters)
     params.A(1)    = 0.2; 
     params.B       = ones(dims.N, 1);     % Amenities by location
     params.B(1)    = 0.1;    
 
-    % Skill premia: expand across S×N
-    params.theta_s = repmat(1:dims.S', dims.N, 1);  
-    params.theta_k = 2;                   % Returns to human capital in wages
+    % Skill premia: 
+    params.theta_s =    [0.2, 0.3;
+                        1, 1.25;
+                        1.94, 3.42;
+                        2.51, 4.07;
+                        3.08, 4.73;];
+
+
+    params.theta_k = 0.5;                   % Returns to human capital in wages
 
     % Income flows
     params.bbi     = 0.2 * ones(dims.N, 1);  % Unemployment income (N×1)
 
     % Job-finding probabilities (endpoints at ψ=0 and ψ=1)
-    f_base         = [0.2*ones(dims.N,1), 0.9*ones(dims.N,1)];   % N×2
+    f_psi_0        = [0.5;
+                      0.04;
+                      0.12;
+                      0.12;
+                      0.12];
+    
+    f_psi_1        =  [0.5;
+                      0.10;
+                      0.24;
+                      0.26;
+                      0.28];
+    
+    
+    f_base         = [f_psi_0, f_psi_1];                        % N×2
     f_base         = permute(f_base, [3,1,2]);                   % 1×N×2
     params.f       = repmat(f_base, [dims.S, 1, 1]);             % S×N×2
 
     % Job-separation probabilities (endpoints at ψ=0 and ψ=1)
-    g_base         = [0.5*ones(dims.N,1), 0.02*ones(dims.N,1)];  % N×2
+    g_base         = [0.02*ones(dims.N,1), 0.02*ones(dims.N,1)];  % N×2
     g_base         = permute(g_base, [3,1,2]);                   % 1×N×2
     params.g       = repmat(g_base, [dims.S, 1, 1]);             % S×N×2
 
@@ -96,13 +115,14 @@ function params = SetParameters(dims, x)
                     8   3   0   3   8;   % From 3 -> {1,2,4,5}
                    12   8   3   0   3;   % From 4 -> {1,2,3,5}
                    15  12   8   3   0];  % From 5 -> {1,2,3,4}
-
+    
+    params.ttau = params.ttau;
     params.nnu    = 0.1;   % Scale of i.i.d. taste shocks (logit)
 
     %% Help mechanics (network effects)
-    params.aalpha = 0.2;   % Fractional migration cost when helped
-    params.ggamma = 2;     % Elasticity of help probability
-    params.cchi   = 0.15;  % Network erosion probability outside Venezuela
+    params.aalpha = 0.6;   % Fractional migration cost when helped
+    params.ggamma = 1.5;     % Elasticity of help probability
+    params.cchi   = 0.02;  % Network erosion probability outside Venezuela
 
     %% Calibration constant
     params.CONS   = 1e2;   % Scaling constant for calibration

@@ -57,7 +57,7 @@ function [grids, indexes] = setGridsAndIndices(dims)
     %% 1. Asset grids
     lb.a        = 0;     % Lower bound for assets
     ub.a        = 25;    % Upper bound for assets
-    ca          = 1;     % Curvature exponent for coarse grid
+    ca          = 2.5;     % Curvature exponent for coarse grid
 
     % Coarse grid (agrid): nonlinear spacing for accuracy near zero
     grids.agrid  = nodeunif(dims.Na, 0, (ub.a - lb.a)^(1/ca)).^ca + lb.a;

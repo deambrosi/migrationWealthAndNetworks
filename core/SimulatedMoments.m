@@ -1,4 +1,4 @@
-function [mvec, out] = SimulatedMoments(x, opt)
+function out = SimulatedMoments(x, opt)
 % SIMULATEDMOMENTS  End-to-end pipeline: params(x) -> equilibrium -> simulation -> moments.
 %
 %   [MVEC, OUT] = SIMULATEDMOMENTS(X, OPT) builds parameters from X,
@@ -41,7 +41,22 @@ function [mvec, out] = SimulatedMoments(x, opt)
 
     %% 1) Initialize dimensions and settings ---------------------------------
     dims     = setDimensionParam();
-    settings = IterationSettings();
+    settings.it      = 0;   % Iteration counter
+    settings.diffV   = 1;   % Initial V-function difference
+
+     %Convergence tolerances
+    settings.tolV    = 0.5;     % Value function convergence threshold
+    settings.tolM    = 1e-2;    % Migration convergence threshold
+
+    % Iteration limits
+    settings.MaxItV  = 40;      % Maximum iterations for value function iteration
+    settings.MaxItJ  = 10;      % Maximum iterations for policy update (inner loop)
+    settings.MaxIter = 100;     % Maximum iterations for outer algorithm
+
+    % Simulation configuration
+    settings.Nagents = 5000;    % Number of simulated agents
+    settings.T       = 100;     % Total simulated time periods
+    settings.burn    = 50;      % Burn-in periods removed from statistics
 
     if isfield(opt, 'fast') && opt.fast
         settings.Nagents = 1000;
@@ -101,7 +116,7 @@ function [mvec, out] = SimulatedMoments(x, opt)
         agentData = rmfield(agentData, 'flowLog');
     end
 
-    [mvec, map] = packMoments(moments, dims, settings);
+    %[mvec, map] = packMoments(moments, dims, settings);
 
     %% 7) Pack outputs -------------------------------------------------------
     out.dims      = dims;
@@ -116,7 +131,7 @@ function [mvec, out] = SimulatedMoments(x, opt)
     out.agentData = agentData;
     out.flowLog   = flowLog;
     out.moments   = moments;
-    out.map       = map;
+    %out.map       = map;
     out.matrices  = matrices;
 
 end
