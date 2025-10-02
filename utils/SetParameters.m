@@ -71,6 +71,7 @@ function params = SetParameters(dims, x)
 
     % Skill premia: 
     params.theta_s =    [0.2, 0.3;
+                        0.85, 1.1;
                         1, 1.25;
                         1.94, 3.42;
                         2.51, 4.07;
@@ -85,12 +86,14 @@ function params = SetParameters(dims, x)
     % Job-finding probabilities (endpoints at ψ=0 and ψ=1)
     f_psi_0        = [0.5;
                       0.04;
+                      0.06;
                       0.12;
                       0.12;
                       0.12];
     
     f_psi_1        =  [0.5;
                       0.10;
+                      0.12;
                       0.24;
                       0.26;
                       0.28];
@@ -110,11 +113,12 @@ function params = SetParameters(dims, x)
 
     %% Migration & choice frictions
     % Base migration cost matrix (encourages stepping-stone migration).
-    params.ttau = [ 0   3   8  12  15;   % From 1 -> {2,3,4,5}
-                    3   0   3   8  12;   % From 2 -> {1,3,4,5}
-                    8   3   0   3   8;   % From 3 -> {1,2,4,5}
-                   12   8   3   0   3;   % From 4 -> {1,2,3,5}
-                   15  12   8   3   0];  % From 5 -> {1,2,3,4}
+    params.ttau = [ 0   2   4   7   11  15;  % from 1 -> {2,3,4,5,6}
+                    2   0   3   6   10  14;  % from 2 -> {1,3,4,5,6}
+                    4   3   0   4   8   12;  % from 3 -> {1,2,4,5,6}
+                    7   6   4   0   5   9 ;  % from 4 -> {1,2,3,5,6}
+                    11 10  8   5   0   5 ;  % from 5 -> {1,2,3,4,6}
+                    15 14 12  9   5   0  ]; % from 6 -> {1,2,3,4,5}
     
     params.ttau = params.ttau;
     params.nnu    = 0.1;   % Scale of i.i.d. taste shocks (logit)
