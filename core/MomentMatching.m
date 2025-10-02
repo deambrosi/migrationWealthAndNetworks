@@ -382,12 +382,21 @@ function lookup = buildLocationLookup(dims, optMatch)
 
     lookup = containers.Map('KeyType', 'char', 'ValueType', 'double');
 
-    defaultNames = {'venezuela', 'colombiaborder', 'colombiarest', ...
-                    'colombia', 'ecuador', 'peru', 'chile', 'argentina'};
+    defaultPairs = {
+        'venezuela',      1;
+        'colombiaborder', 2;
+        'colombiarest',   3;
+        'ecuador',        4;
+        'peru',           5;
+        'chile',          6;
+        'argentina',      7;
+    };
 
-    for i = 1:min(numel(defaultNames), dims.N)
-        if ~isKey(lookup, defaultNames{i})
-            lookup(defaultNames{i}) = i;
+    for i = 1:size(defaultPairs, 1)
+        name = defaultPairs{i, 1};
+        idx  = defaultPairs{i, 2};
+        if idx <= dims.N && ~isKey(lookup, name)
+            lookup(name) = idx;
         end
     end
 
