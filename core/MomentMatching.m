@@ -13,7 +13,9 @@ function results = MomentMatching(dataCsvPath, optSim, optMatch)
 %   ------
 %   dataCsvPath : char/string
 %       Path to a CSV file containing empirical targets in long format. See the
-%       template in data/moment_targets_example.csv for the required columns.
+%       templates in data/moment_targets_example.csv or
+%       data/moment_targets_empirical.csv for the required columns.
+
 %
 %   optSim : struct (optional)
 %       Options passed directly to SimulatedMoments.m (e.g., optSim.fast,
@@ -85,6 +87,8 @@ function results = MomentMatching(dataCsvPath, optSim, optMatch)
 
     %% 2) Read empirical targets ---------------------------------------------
     dataTable = readtable(dataCsvPath, 'TextType', 'string');
+    dataTable = standardizeMomentTable(dataTable);
+
     [dataVec, weights, meta, parsers] = buildDataVector(dataTable, dims, optMatch);
 
     %% 3) Parameter transforms and initial point -----------------------------
@@ -157,7 +161,7 @@ function results = MomentMatching(dataCsvPath, optSim, optMatch)
 
         problem = struct();
         problem.objective = @objective;
-        problem.x0        = thetaStar;
+        problem.x0        = bestRecord.theta;
         problem.lb        = lb;
         problem.ub        = ub;
         problem.options   = fmOpts;
@@ -209,7 +213,7 @@ function [dataVec, weights, meta, parsers] = buildDataVector(tbl, dims, optMatch
         weightCol = optMatch.weightsColumn;
     end
     if ismember(weightCol, tbl.Properties.VariableNames)
-        weights = tbl.(weightCol);
+        weights = toNumericColumn(tbl.(weightCol));
         if any(isnan(weights))
             error('MomentMatching:InvalidWeights', 'Weight column contains NaNs.');
         end
@@ -266,30 +270,108 @@ function [dataVec, weights, meta, parsers] = buildDataVector(tbl, dims, optMatch
 
     % Tenure years ---------------------------------------------------------
     if ismember('tenure_year', tbl.Properties.VariableNames)
-        tenureYear = tbl.tenure_year;
+        tenureYear = toNumericColumn(tbl.tenure_year);
     else
         tenureYear = NaN(nObs, 1);
     end
 
     % Years ----------------------------------------------------------------
-    years = double(tbl.year(:));
-    if any(isnan(years))
-        error('MomentMatching:InvalidYear', 'Year column contains NaNs.');
+    yearValues = toNumericColumn(tbl.year);
+    yearIdx = zeros(nObs, 1);
+    uniqueYears = unique(yearValues(~isnan(yearValues)));
+    uniqueYears = sort(uniqueYears(:));
+    for k = 1:numel(uniqueYears)
+        yearIdx(yearValues == uniqueYears(k)) = k;
     end
-    if any(years < 1)
-        error('MomentMatching:InvalidYear', 'Year values must be >= 1.');
-    end
+
+    parsers.yearValues = uniqueYears;
 
     % Values ---------------------------------------------------------------
-    values = double(tbl.value(:));
+    values = toNumericColumn(tbl.value);
 
-    meta = table(momentTypeRaw, locationIdx, skillIdx, years, tenureYear, category, ...
-        'VariableNames', {'moment_type', 'location', 'skill', 'year', 'tenure_year', 'category'});
+    meta = table(momentTypeRaw, locationIdx, skillIdx, yearValues, yearIdx, tenureYear, category, ...
+        'VariableNames', {'moment_type', 'location', 'skill', 'year_value', 'year_idx', 'tenure_year', 'category'});
 
     dataVec = values(:);
 end
 
 %% -------------------------------------------------------------------------
+function tbl = standardizeMomentTable(tbl)
+% STANDARDIZEMOMENTTABLE  Clean variable names for reliable downstream access.
+
+    varNames = tbl.Properties.VariableNames;
+    newNames = cell(size(varNames));
+    for i = 1:numel(varNames)
+        raw = lower(strtrim(varNames{i}));
+        raw = regexprep(raw, '[^a-z0-9]', '');
+        switch raw
+            case 'momenttype'
+                newNames{i} = 'moment_type';
+            case 'location'
+                newNames{i} = 'location';
+            case 'skill'
+                newNames{i} = 'skill';
+            case 'year'
+                newNames{i} = 'year';
+            case 'tenureyear'
+                newNames{i} = 'tenure_year';
+            case 'value'
+                newNames{i} = 'value';
+            case 'weight'
+                newNames{i} = 'weight';
+            case 'category'
+                newNames{i} = 'category';
+            otherwise
+                newNames{i} = matlab.lang.makeValidName(varNames{i});
+        end
+    end
+    tbl.Properties.VariableNames = matlab.lang.makeUniqueStrings(newNames);
+end
+
+%% -------------------------------------------------------------------------
+function vec = toNumericColumn(col)
+% TONUMERICCOLUMN  Convert assorted column types to double column vectors.
+
+    if isnumeric(col)
+        vec = double(col(:));
+        return;
+    end
+    if islogical(col)
+        vec = double(col(:));
+        return;
+    end
+    if isstring(col)
+        vec = str2double(col(:));
+        return;
+    end
+    if iscell(col)
+        vec = nan(numel(col), 1);
+        for i = 1:numel(col)
+            item = col{i};
+            if isempty(item)
+                vec(i) = NaN;
+            elseif isstring(item)
+                vec(i) = str2double(item);
+            elseif ischar(item)
+                vec(i) = str2double(strtrim(item));
+            elseif isnumeric(item) || islogical(item)
+                vec(i) = double(item);
+            else
+                vec(i) = str2double(string(item));
+            end
+        end
+        return;
+    end
+    if iscategorical(col)
+        vec = str2double(string(col(:)));
+        return;
+    end
+    error('MomentMatching:UnsupportedColumnType', ...
+        'Unsupported column type %s for numeric conversion.', class(col));
+end
+
+%% -------------------------------------------------------------------------
+
 function lookup = buildLocationLookup(dims, optMatch)
 % BUILDLOCATIONLOOKUP  Construct name -> index mapping for locations.
 
@@ -603,10 +685,12 @@ function simVec = computeSimulatedVector(out, meta, parsers, optMatch)
     startQ   = settings.burn + 1;
     totalQuarters = settings.T - settings.burn;
     numYears = min(maxYearsDefault, floor(totalQuarters / quartersPerYear));
-    if numYears < max(meta.year)
+
+    requiredYears = max([0; meta.year_idx]);
+    if numYears < requiredYears
         error('MomentMatching:InsufficientYears', ...
-            'Simulation provides only %d usable years; data require year %d.', ...
-            numYears, max(meta.year));
+            'Simulation provides only %d usable years; data require year index %d.', ...
+            numYears, requiredYears);
     end
 
     yearEndIdx = startQ + (1:numYears) * quartersPerYear - 1;
@@ -627,11 +711,10 @@ function simVec = computeSimulatedVector(out, meta, parsers, optMatch)
     stateTraj = double(out.agentData.state);
     skillVec  = double(out.agentData.skill(:));
 
-    % Mass at year end -----------------------------------------------------
-    massCounts = populationScale * out.M_total(:, yearEndIdx(1:numYears));
-
-    % Skill shares by location --------------------------------------------
-    skillShares = zeros(S, N, numYears);
+    % Location shares by skill and in total --------------------------------
+    totalAgents = size(locTraj, 1);
+    shareBySkill = zeros(S, N, numYears);
+    shareTotal   = zeros(N, numYears);
     for y = 1:numYears
         q = yearEndIdx(y);
         loc_q = locTraj(:, q);
@@ -641,8 +724,9 @@ function simVec = computeSimulatedVector(out, meta, parsers, optMatch)
             if countLoc == 0
                 continue;
             end
+            shareTotal(i, y) = countLoc / totalAgents;
             for s = 1:S
-                skillShares(s, i, y) = sum(skillVec == s & inLoc) / countLoc;
+                shareBySkill(s, i, y) = sum(skillVec == s & inLoc) / totalAgents;
             end
         end
     end
@@ -659,27 +743,29 @@ function simVec = computeSimulatedVector(out, meta, parsers, optMatch)
     isUnemployed = stateTraj <= dims.k;
 
     maxTenureYears = 4;
-    tenureCounts = zeros(N, maxTenureYears);
-    tenureUnemp  = zeros(N, maxTenureYears);
-    usableYears = min(numYears, maxTenureYears);
+    tenureCounts = zeros(N, maxTenureYears + 1);
+    tenureUnemp  = zeros(N, maxTenureYears + 1);
+    usableYears = min(numYears, maxTenureYears + 1);
     for y = 1:usableYears
         q = yearEndIdx(y);
         tenureQuarters = q - arrivalQuarter(:, q);
-        tenureYears = min(maxTenureYears, floor(tenureQuarters / quartersPerYear) + 1);
+        tenureYearsZero = min(maxTenureYears, floor(tenureQuarters / quartersPerYear));
         for i = 1:N
             inLoc = (locTraj(:, q) == i);
-            for d = 1:maxTenureYears
-                mask = inLoc & (tenureYears == d);
-                tenureCounts(i, d) = tenureCounts(i, d) + sum(mask);
-                tenureUnemp(i, d)  = tenureUnemp(i, d)  + sum(isUnemployed(mask, q));
+            for d = 0:maxTenureYears
+                idxTenure = d + 1;
+                mask = inLoc & (tenureYearsZero == d);
+                tenureCounts(i, idxTenure) = tenureCounts(i, idxTenure) + sum(mask);
+                tenureUnemp(i, idxTenure)  = tenureUnemp(i, idxTenure)  + sum(isUnemployed(mask, q));
             end
         end
     end
-    unempByTenure = zeros(N, maxTenureYears);
+    unempByTenure = zeros(N, maxTenureYears + 1);
     for i = 1:N
-        for d = 1:maxTenureYears
-            if tenureCounts(i, d) > 0
-                unempByTenure(i, d) = tenureUnemp(i, d) / tenureCounts(i, d);
+        for d = 0:maxTenureYears
+            idxTenure = d + 1;
+            if tenureCounts(i, idxTenure) > 0
+                unempByTenure(i, idxTenure) = tenureUnemp(i, idxTenure) / tenureCounts(i, idxTenure);
             end
         end
     end
@@ -698,6 +784,7 @@ function simVec = computeSimulatedVector(out, meta, parsers, optMatch)
 
     arrivalsHelp = zeros(N, numYears, 2);   % (:,:,1)=with help, (:,:,2)=without
     arrivalsOrigin = zeros(N, numYears, 2); % (:,:,1)=direct, (:,:,2)=stepping
+    arrivalsTotal = zeros(N, numYears);
 
     qStart = max(2, startQ);
     qEnd   = min(settings.T, startQ + numYears * quartersPerYear - 1);
@@ -716,10 +803,12 @@ function simVec = computeSimulatedVector(out, meta, parsers, optMatch)
         for i = 1:N
             mask = (dest == i);
             if any(mask)
+                countArrivals = sum(mask);
                 arrivalsHelp(i, yearIdx, 1) = arrivalsHelp(i, yearIdx, 1) + sum(helpFlags(mask));
                 arrivalsHelp(i, yearIdx, 2) = arrivalsHelp(i, yearIdx, 2) + sum(~helpFlags(mask));
                 arrivalsOrigin(i, yearIdx, 1) = arrivalsOrigin(i, yearIdx, 1) + sum(directFlags(mask));
                 arrivalsOrigin(i, yearIdx, 2) = arrivalsOrigin(i, yearIdx, 2) + sum(~directFlags(mask));
+                arrivalsTotal(i, yearIdx)    = arrivalsTotal(i, yearIdx) + countArrivals;
             end
         end
     end
@@ -730,54 +819,62 @@ function simVec = computeSimulatedVector(out, meta, parsers, optMatch)
     for obs = 1:nObs
         mType = meta.moment_type(obs);
         iLoc  = meta.location(obs);
-        year  = meta.year(obs);
+        yearIdx = meta.year_idx(obs);
         skill = meta.skill(obs);
-        cat   = meta.category(obs);
         tenureYear = meta.tenure_year(obs);
 
         switch mType
-            case 'mass_end_year'
-                simVec(obs) = massCounts(iLoc, year);
-
-            case 'skill_share'
-                if isnan(skill)
-                    error('MomentMatching:MissingSkill', ...
-                        'Skill identifier required for skill_share moments.');
+            case 'share_end_year'
+                if yearIdx < 1 || yearIdx > numYears
+                    error('MomentMatching:YearOutOfRange', ...
+                        'Year index %d outside simulated range 1-%d.', yearIdx, numYears);
                 end
-                simVec(obs) = skillShares(skill, iLoc, year);
+                if isnan(skill)
+                    simVec(obs) = shareTotal(iLoc, yearIdx);
+                else
+                    simVec(obs) = shareBySkill(skill, iLoc, yearIdx);
+                end
 
-            case 'unemp_by_tenure'
+            case 'unemployment_rate'
                 if isnan(tenureYear)
                     error('MomentMatching:MissingTenure', ...
-                        'Tenure year required for unemp_by_tenure moments.');
+                        'Tenure year required for unemployment_rate moments.');
                 end
-                if tenureYear < 1 || tenureYear > 4
+                if tenureYear < 0 || tenureYear > maxTenureYears
                     error('MomentMatching:TenureRange', ...
-                        'Tenure year %g outside supported range 1-4.', tenureYear);
+                        'Tenure year %g outside supported range 0-%d.', tenureYear, maxTenureYears);
                 end
-                simVec(obs) = unempByTenure(iLoc, tenureYear);
+                idxTenure = round(tenureYear) + 1;
+                if abs(idxTenure - (tenureYear + 1)) > 1e-6
+                    error('MomentMatching:TenureNonInteger', ...
+                        'Tenure year must be integer-valued (received %g).', tenureYear);
+                end
+                simVec(obs) = unempByTenure(iLoc, idxTenure);
 
-            case 'arrivals_help'
-                if cat == "with_help"
-                    idxHelp = 1;
-                elseif cat == "without_help"
-                    idxHelp = 2;
-                else
-                    error('MomentMatching:UnknownCategory', ...
-                        'Category must be with_help/without_help for arrivals_help.');
+            case 'came_with_help'
+                if yearIdx < 1 || yearIdx > numYears
+                    error('MomentMatching:YearOutOfRange', ...
+                        'Year index %d outside simulated range 1-%d.', yearIdx, numYears);
                 end
-                simVec(obs) = arrivalsHelp(iLoc, year, idxHelp);
+                totalArr = arrivalsTotal(iLoc, yearIdx);
+                if totalArr > 0
+                    simVec(obs) = arrivalsHelp(iLoc, yearIdx, 1) / totalArr;
+                else
+                    simVec(obs) = 0;
+                end
 
-            case 'arrivals_origin'
-                if cat == "direct"
-                    idxOrig = 1;
-                elseif cat == "stepping"
-                    idxOrig = 2;
-                else
-                    error('MomentMatching:UnknownCategory', ...
-                        'Category must be direct/stepping for arrivals_origin.');
+            case 'came_directly'
+                if yearIdx < 1 || yearIdx > numYears
+                    error('MomentMatching:YearOutOfRange', ...
+                        'Year index %d outside simulated range 1-%d.', yearIdx, numYears);
                 end
-                simVec(obs) = arrivalsOrigin(iLoc, year, idxOrig);
+                totalArr = sum(arrivalsOrigin(iLoc, yearIdx, :), 3);
+                totalArr = totalArr(1);
+                if totalArr > 0
+                    simVec(obs) = arrivalsOrigin(iLoc, yearIdx, 1) / totalArr;
+                else
+                    simVec(obs) = 0;
+                end
 
             otherwise
                 error('MomentMatching:UnknownMomentType', ...
