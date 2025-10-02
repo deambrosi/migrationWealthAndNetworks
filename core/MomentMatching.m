@@ -15,6 +15,7 @@ function results = MomentMatching(dataCsvPath, optSim, optMatch)
 %       Path to a CSV file containing empirical targets in long format. See the
 %       templates in data/moment_targets_example.csv or
 %       data/moment_targets_empirical.csv for the required columns.
+
 %
 %   optSim : struct (optional)
 %       Options passed directly to SimulatedMoments.m (e.g., optSim.fast,
@@ -87,6 +88,7 @@ function results = MomentMatching(dataCsvPath, optSim, optMatch)
     %% 2) Read empirical targets ---------------------------------------------
     dataTable = readtable(dataCsvPath, 'TextType', 'string');
     dataTable = standardizeMomentTable(dataTable);
+
     [dataVec, weights, meta, parsers] = buildDataVector(dataTable, dims, optMatch);
 
     %% 3) Parameter transforms and initial point -----------------------------
@@ -369,6 +371,7 @@ function vec = toNumericColumn(col)
 end
 
 %% -------------------------------------------------------------------------
+
 function lookup = buildLocationLookup(dims, optMatch)
 % BUILDLOCATIONLOOKUP  Construct name -> index mapping for locations.
 
