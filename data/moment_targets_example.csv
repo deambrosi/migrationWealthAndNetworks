@@ -1,0 +1,14 @@
+moment_type,location,skill,year,tenure_year,category,value,weight,units
+mass_end_year,venezuela,,1,,,4800,1,persons
+mass_end_year,colombiaborder,,1,,,1050,1,persons
+mass_end_year,colombiarest,,1,,,650,1,persons
+skill_share,colombiaborder,low,1,,,0.74,1,share_within_location
+skill_share,colombiaborder,high,1,,,0.26,1,share_within_location
+skill_share,colombiarest,low,1,,,0.68,1,share_within_location
+skill_share,colombiarest,high,1,,,0.32,1,share_within_location
+unemp_by_tenure,colombiaborder,,1,1,,0.27,1,share_unemployed
+unemp_by_tenure,colombiaborder,,1,2,,0.22,1,share_unemployed
+arrivals_help,ecuador,,2,,with_help,180,1,persons
+arrivals_help,ecuador,,2,,without_help,420,1,persons
+arrivals_origin,peru,,3,,direct,210,1,persons
+arrivals_origin,peru,,3,,stepping,390,1,persons
