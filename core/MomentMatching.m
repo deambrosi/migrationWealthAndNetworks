@@ -88,7 +88,6 @@ function results = MomentMatching(dataCsvPath, optSim, optMatch)
     %% 2) Read empirical targets ---------------------------------------------
     dataTable = readtable(dataCsvPath, 'TextType', 'string');
     dataTable = standardizeMomentTable(dataTable);
-
     [dataVec, weights, meta, parsers] = buildDataVector(dataTable, dims, optMatch);
 
     %% 3) Parameter transforms and initial point -----------------------------
@@ -382,12 +381,28 @@ function lookup = buildLocationLookup(dims, optMatch)
 
     lookup = containers.Map('KeyType', 'char', 'ValueType', 'double');
 
-    defaultNames = {'venezuela', 'colombiaborder', 'colombiarest', ...
-                    'colombia', 'ecuador', 'peru', 'chile', 'argentina'};
+    % Canonical aliases for corridor locations. Each cell contains the labels
+    % that should map to the corresponding location index when available in
+    % the current dimensionality. This list intentionally skips "colombia" as
+    % a standalone entry because the data distinguish border vs. rest.
+    aliasSets = {
+        {'venezuela', 'vzla', 'origin'};                % 1 = origin
+        {'colombiaborder', 'colombia_border', 'border'};% 2 = Colombian border
+        {'colombiarest', 'colombia_rest', 'colombia'};  % 3 = Rest of Colombia
+        {'ecuador', 'ec'};                              % 4 = Ecuador
+        {'peru', 'pe'};                                 % 5 = Peru
+        {'chile', 'cl'};                                % 6 = Chile
+        {'argentina', 'ar'};                            % 7 = Argentina
+        {'usa', 'unitedstates', 'us'};                  % 8 = USA (fallback)
+    };
 
-    for i = 1:min(numel(defaultNames), dims.N)
-        if ~isKey(lookup, defaultNames{i})
-            lookup(defaultNames{i}) = i;
+    for i = 1:min(dims.N, numel(aliasSets))
+        aliases = aliasSets{i};
+        for a = 1:numel(aliases)
+            key = lower(char(aliases{a}));
+            if ~isKey(lookup, key)
+                lookup(key) = i;
+            end
         end
     end
 
