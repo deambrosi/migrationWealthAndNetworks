@@ -467,12 +467,17 @@ function idx = parseCategorical(rawValue, lookup, label)
         idx = double(rawValue);
     elseif isstring(rawValue) || ischar(rawValue)
         str = lower(strtrim(string(rawValue)));
+        if any(ismissing(str))
+            error('MomentMatching:MissingCategory', ...
+                'Missing value encountered for %s.', label);
+        end
         if strlength(str) == 0
             error('MomentMatching:MissingCategory', ...
                 'Empty string encountered for %s.', label);
         end
-        if isKey(lookup, char(str))
-            idx = lookup(char(str));
+        key = char(str);
+        if isKey(lookup, key)
+            idx = lookup(key);
         else
             numVal = str2double(str);
             if ~isnan(numVal)
@@ -500,15 +505,30 @@ function tf = isMissing(val)
 
     if isempty(val)
         tf = true;
-    elseif isstring(val)
-        tf = strlength(val) == 0;
-    elseif ischar(val)
-        tf = isempty(strtrim(val));
-    elseif iscell(val)
-        tf = all(cellfun(@isMissing, val));
-    else
-        tf = false;
+        return;
     end
+
+    if isstring(val)
+        tf = any(ismissing(val)) || all(strlength(strtrim(val)) == 0);
+        return;
+    end
+
+    if ischar(val)
+        tf = isempty(strtrim(val));
+        return;
+    end
+
+    if iscell(val)
+        tf = all(cellfun(@isMissing, val));
+        return;
+    end
+
+    if isnumeric(val)
+        tf = any(isnan(val));
+        return;
+    end
+
+    tf = false;
 end
 
 %% -------------------------------------------------------------------------
