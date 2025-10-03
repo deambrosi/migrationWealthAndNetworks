@@ -65,7 +65,7 @@ function [vf, pol] = noHelpEqm(dims, params, grids, indexes, matrices, settings)
         itV = itV + 1;
 
         % Bellman update and policy extraction given fixed help PMF G0
-        [vf, pol] = updateValueAndPolicy(val, dims, params, grids, indexes, matrices, params.G0, params.A);
+        [vf, pol] = updateValueAndPolicy(val, dims, params, grids, indexes, matrices, params.G0);
 
         % Scale-free convergence check on Vn (robust when levels change)
         diffV = sum(abs(vf.Vn - val.Vn) ./ (1 + abs(vf.Vn)), 'all');

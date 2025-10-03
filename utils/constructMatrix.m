@@ -21,9 +21,6 @@ function matrices = constructMatrix(dims, params, grids, indexes)
 %   ------
 %   matrices : struct with fields
 %       .Ue        Utility from feasible consumption (−∞ for infeasible).
-%       .cons_base Baseline consumption component (no productivity income).
-%       .employed_income_base  Contribution of productivity to income.
-%       .amenity_weight        Amenity scaling factors for utility.
 %       .a_prime   Assets net of migration costs (S×K×Na×N×N×H).
 %       .mig_costs Raw effective migration costs τ^{iℓ}(h) (N×N×H).
 %       .Hbin      Binary help matrix enumerating h (H×N).
@@ -51,30 +48,26 @@ function matrices = constructMatrix(dims, params, grids, indexes)
     idx_SN   = sub2ind([dims.S, dims.N], indexes.I_sp, indexes.I_Np);
     theta_sn = params.theta_s(idx_SN);
 
-    % Income flow components (separate the productivity-sensitive part)
-    %   • Unemployed income: b_i (location-specific benefit).
-    %   • Employed income   : A_i × θ^s_i × (1+ψ)^(θ_k).
-    income_unemp = (2 - indexes.I_ep) .* params.bbi(indexes.I_Np);
-    income_emp_base = (indexes.I_ep - 1) .* theta_sn .* ...
-                      (1 + grids.psi(indexes.I_psip)).^(params.theta_k);
+    % Income flow:
+    %   • Unemployed: b_i (location-specific benefit).
+    %   • Employed  : A_i * θ^s_i * (1+ψ)^(θ_k).
+    income = (2 - indexes.I_ep) .* params.bbi(indexes.I_Np) + ...
+             (indexes.I_ep - 1) .* params.A(indexes.I_Np) .* ...
+             theta_sn .* (1 + grids.psi(indexes.I_psip)).^(params.theta_k);
 
-    % Consumption = gross return on assets + income − savings. Store the
-    % components that are independent of productivity so that time-varying
-    % productivity paths can be evaluated cheaply later on.
-    cons_base = (1 / params.bbeta) .* grids.agrid(indexes.I_ap) + ...
-                income_unemp - grids.ahgrid(indexes.I_app);
+    % Consumption = gross return on assets + income − savings
+    cons = (1 / params.bbeta) .* grids.agrid(indexes.I_ap) + ...
+           income - grids.ahgrid(indexes.I_app);
 
     % Amenity scaling: B_i × (1 + ξ·ψ)^(φH)
     amenity_weight = params.B(indexes.I_Np) .* ...
                      (1 + params.xi .* grids.psi(indexes.I_psip)).^(params.phiH);
 
-    % Store the building blocks for time-varying utility evaluation.
-    matrices.cons_base            = cons_base;
-    matrices.employed_income_base = income_emp_base;
-    matrices.amenity_weight       = amenity_weight;
-
-    % Evaluate utility at the baseline productivity vector currently in params.A.
-    Ue = computeUtilityGivenProductivity(params.A, matrices, indexes.I_Np);
+    % Period utility from consumption (log utility with amenity weight)
+    Ue          = zeros(size(cons));
+    feasible    = cons > 0;
+    Ue(feasible)  = amenity_weight(feasible) .* log(cons(feasible));
+    Ue(~feasible) = -realmax;   % penalize infeasible consumption
 
     %% 2. After-migration wealth -------------------------------------------------
     % Effective migration cost tensor: τ^{iℓ}(h), N×N×H
