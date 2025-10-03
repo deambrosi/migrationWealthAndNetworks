@@ -59,14 +59,31 @@ function [vf_path, pol_path] = PolicyDynamics(M1, vf_terminal, dims, params, gri
     vf_path{T} = vf_terminal;
 
     % Productivity path (N×T). Ensure availability for backward induction.
-    if ~isfield(params, 'A_path')
-        error('PolicyDynamics:MissingAPath', ...
-            'params.A_path is required for time-varying productivity.');
-    elseif size(params.A_path, 2) < T
-        error('PolicyDynamics:InvalidAPath', ...
-            'params.A_path must have at least T=%d columns.', T);
+    if ~isfield(params, 'A_path') || isempty(params.A_path)
+        % Fall back to a time-invariant productivity path using params.A.
+        A_path = repmat(params.A(:), 1, T);
+    else
+        A_path_in = params.A_path;
+
+        % Ensure the input has N rows; try to coerce column vectors when possible.
+        if size(A_path_in, 1) ~= dims.N
+            if numel(A_path_in) == dims.N
+                A_path_in = reshape(A_path_in, dims.N, []);
+            else
+                error('PolicyDynamics:InvalidAPath', ...
+                    'params.A_path must have %d rows (locations).', dims.N);
+            end
+        end
+
+        cols_in = size(A_path_in, 2);
+        if cols_in >= T
+            A_path = A_path_in(:, 1:T);
+        else
+            % Extend the provided path by holding the final column constant.
+            A_path = repmat(A_path_in(:, end), 1, T);
+            A_path(:, 1:cols_in) = A_path_in;
+        end
     end
-    A_path = params.A_path;
 
     %% 2) Backward induction: t = T-1 down to 1
     for t = T-1:-1:1
