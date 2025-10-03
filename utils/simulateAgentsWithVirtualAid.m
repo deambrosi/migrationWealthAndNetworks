@@ -24,12 +24,17 @@ function [M_history, MIN_history, agentData, flowLog, aidLog] = simulateAgentsWi
 %                   helper configuration binary matrix Hbin, ...).
 %       settings  : simulation settings (Nagents, T, burn, ...).
 %       aidOpt    : optional struct configuring the aid program with fields
-%                     .totalBudget   Total funds available for subsidies.
-%                     .startPeriod   First decision period when aid is active.
-%                     .virtualMass   Scalar or vector added to G_dist before
-%                                    drawing the program help h'.
-%                     .shuffleAgents Whether to reshuffle agents initially.
-%                     .name          Label stored in the returned aidLog.
+%                     .totalBudget          Total funds available for subsidies.
+%                     .startPeriod          First decision period when aid is active.
+%                     .virtualMass          Scalar or vector added to G_dist before
+%                                           drawing the program help h'.
+%                     .shuffleAgents        Whether to reshuffle agents initially.
+%                     .name                 Label stored in the returned aidLog.
+%                     .programDestinationMask Logical mask for destinations that
+%                                           the program is allowed to unlock.
+%                                           By default destination 2 is disabled
+%                                           so the program cannot introduce new
+%                                           help there.
 %
 %   OUTPUTS
 %       M_history   : aggregate location shares over time.
@@ -50,6 +55,18 @@ function [M_history, MIN_history, agentData, flowLog, aidLog] = simulateAgentsWi
     if ~isfield(aidOpt, 'virtualMass'), aidOpt.virtualMass = 0; end
     if ~isfield(aidOpt, 'shuffleAgents'), aidOpt.shuffleAgents = true; end
     if ~isfield(aidOpt, 'name'), aidOpt.name = 'VirtualAid'; end
+    if ~isfield(aidOpt, 'programDestinationMask')
+        programDestinationMask = true(1, dims.N);
+        if numel(programDestinationMask) >= 2
+            programDestinationMask(2) = false;            % Enforce restriction for destination 2 by default.
+        end
+    else
+        programDestinationMask = logical(aidOpt.programDestinationMask(:)');
+        if numel(programDestinationMask) ~= dims.N
+            error('simulateAgentsWithVirtualAid:destinationMaskSize', ...
+                'programDestinationMask must have one entry per destination.');
+        end
+    end
 
     totalBudget   = max(0, double(aidOpt.totalBudget));      % Non-negative total resources.
     startPeriod   = max(1, round(double(aidOpt.startPeriod)));% First period when aid can operate.
@@ -250,17 +267,19 @@ function [M_history, MIN_history, agentData, flowLog, aidLog] = simulateAgentsWi
                     hIdxProgram = 1;
                 end
                 helpVecProgram = Hbin(double(hIdxProgram), :);
+                helpVecProgram = double(helpVecProgram & programDestinationMask); % Mask out disallowed destinations.
 
                 % Merge the baseline and program help vectors elementwise.
                 helpVecFinal = max(helpVecBaseline, helpVecProgram);
+                helpVecFinal(~programDestinationMask) = helpVecBaseline(~programDestinationMask); % Preserve baseline on restricted destinations.
 
                 % Locate the index corresponding to the merged help vector so we can query policies.
                 helpKeyFinal = char('0' + helpVecFinal);
                 if isKey(helpKey, helpKeyFinal)
                     hIdxFinal = uint16(helpKey(helpKeyFinal));
                 else
-                    error('simulateAgentsWithVirtualAid:MissingHelpIndex', ...
-                        'Merged help vector not found in Hbin lookup table.');
+                    helpVecFinal = helpVecBaseline;        % Fall back to baseline configuration when masked vector missing.
+                    hIdxFinal = hIdxBaseline;
                 end
             end
 
