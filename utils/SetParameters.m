@@ -65,7 +65,7 @@ function params = SetParameters(dims, x)
 
     %% Location-specific features
     params.A       = ones(dims.N,1);         % Productivity by location (wage shifters)
-    params.A(1)    = 0.2; 
+    params.A(1)    = 1.0;                    % Venezuela starts at high productivity
     params.B       = ones(dims.N, 1);     % Amenities by location
     params.B(1)    = 0.1;    
 

@@ -27,7 +27,13 @@ function mom = computeSimulatedMoments(agentData, M_total, M_network, dims, para
     Nagents   = size(locTraj, 1);
     T         = size(locTraj, 2);
 
-    A_vals      = params.A(locTraj);
+    if isfield(params, 'A_path') && size(params.A_path, 2) >= T
+        t_index   = repmat(1:T, Nagents, 1);
+        lin_idx   = sub2ind([N, T], locTraj(:), t_index(:));
+        A_vals    = reshape(params.A_path(lin_idx), Nagents, T);
+    else
+        A_vals    = params.A(locTraj);
+    end
     
     % Build [Nagents x T] skill matrix to match locTraj
     skillMat   = repmat(skillVec, 1, T);

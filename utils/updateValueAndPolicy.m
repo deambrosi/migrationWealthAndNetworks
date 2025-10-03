@@ -1,7 +1,7 @@
-function [vf, pol] = updateValueAndPolicy(val, dims, params, grids, indexes, matrices, G)
+function [vf, pol] = updateValueAndPolicy(val, dims, params, grids, indexes, matrices, G, A_current)
 % UPDATEVALUEANDPOLICY  Bellman update and optimal policies (assets & migration).
 %
-%   [VF, POL] = UPDATEVALUEANDPOLICY(VAL, DIMS, PARAMS, GRIDS, INDEXES, MATRICES, G)
+%   [VF, POL] = UPDATEVALUEANDPOLICY(VAL, DIMS, PARAMS, GRIDS, INDEXES, MATRICES, G, A_CURRENT)
 %   updates value functions for agents without network access (n=0) and with
 %   network access (n=1), given current guesses VAL.V and VAL.Vn. It:
 %     1) computes continuation values when STAYING via the (z,ψ) transition,
@@ -26,6 +26,8 @@ function [vf, pol] = updateValueAndPolicy(val, dims, params, grids, indexes, mat
 %       .a_prime   [S × K × Na × N × N × H] post-migration assets
 %       .P         [S × K × K × N] stay operator over (z,ψ)
 %   G        : [H × 1] (or H×T) help-PMF; here treated as an exogenous weight
+%   A_current: [N × 1] productivity vector for the current period. If omitted
+%              the function falls back to MATRICES.Ue (stationary case).
 %
 %   OUTPUTS
 %   -------
@@ -122,14 +124,20 @@ function [vf, pol] = updateValueAndPolicy(val, dims, params, grids, indexes, mat
     vf.Rn = params.bbeta * sum(Eh,         5);   % S×K×Na×N
 
     %% 6) Asset choice: maximize U(c) + R on the fine grid
+    if nargin < 8 || isempty(A_current)
+        Ue_current = matrices.Ue;
+    else
+        Ue_current = computeUtilityGivenProductivity(A_current, matrices, indexes.I_Np);
+    end
+
     % (n = 0)
     interp_R          = interpolateToFinerGrid(grids.agrid, grids.ahgrid, vf.R);
-    total_val         = matrices.Ue + interp_R;                 % shapes align: [S×K×1×N×na]
+    total_val         = Ue_current + interp_R;                 % shapes align: [S×K×1×N×na]
     [vf.V, pol.a]     = max(total_val, [], 5);                  % take argmax over fine asset dim
 
     % (n = 1)
     interp_Rn         = interpolateToFinerGrid(grids.agrid, grids.ahgrid, vf.Rn);
-    total_valn        = matrices.Ue + interp_Rn;
+    total_valn        = Ue_current + interp_Rn;
     [vf.Vn, pol.an]   = max(total_valn, [], 5);
 
     %% 7) Migration policies
