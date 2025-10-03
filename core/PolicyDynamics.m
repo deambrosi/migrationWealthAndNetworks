@@ -58,14 +58,26 @@ function [vf_path, pol_path] = PolicyDynamics(M1, vf_terminal, dims, params, gri
     % Terminal boundary condition
     vf_path{T} = vf_terminal;
 
+    % Productivity path (N×T). Ensure availability for backward induction.
+    if ~isfield(params, 'A_path')
+        error('PolicyDynamics:MissingAPath', ...
+            'params.A_path is required for time-varying productivity.');
+    elseif size(params.A_path, 2) < T
+        error('PolicyDynamics:InvalidAPath', ...
+            'params.A_path must have at least T=%d columns.', T);
+    end
+    A_path = params.A_path;
+
     %% 2) Backward induction: t = T-1 down to 1
     for t = T-1:-1:1
         % Help PMF for this period
         G_t = G_path(:, t);    % [H × 1]
 
         % Compute time-t value and policy given continuation at t+1
+        A_t = A_path(:, t);
+
         [vf_t, pol_t] = updateValueAndPolicy( ...
-            vf_path{t+1}, dims, params, grids, indexes, matrices, G_t);
+            vf_path{t+1}, dims, params, grids, indexes, matrices, G_t, A_t);
 
         % Store results
         vf_path{t}   = vf_t;

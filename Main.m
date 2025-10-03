@@ -16,10 +16,11 @@ clc; clear; close all;
 fprintf('Initializing model parameters and grids...\n');
 try
     dims                = setDimensionParam();                            % Dimensions (S, N, k, K, H, Na, na)
+    settings            = IterationSettings();                            % Iteration controls and simulation length
     params              = SetParameters(dims);                            % Structural parameters
+    params              = attachProductivityPath(params, settings, dims); % Embed time-varying productivity
     [grids, indexes]    = setGridsAndIndices(dims);                       % Grids and index matrices
     matrices            = constructMatrix(dims, params, grids, indexes);  % Precomputed utility, P, and τ-eff
-    settings            = IterationSettings();                            % Iteration controls and simulation length
     m0                  = createInitialDistribution(dims, settings);      % Initial agent distribution
 
     % (optional) keep P in params for functions that expect it

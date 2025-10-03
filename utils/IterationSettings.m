@@ -26,6 +26,8 @@ function settings = IterationSettings()
 %     .Nagents   Number of simulated agents.
 %     .T         Number of simulated time periods.
 %     .burn      Number of initial burn-in periods dropped from analysis.
+%     .T_decline_A_VEN  Horizon (in periods) over which Venezuela's
+%                       productivity declines from 1.0 to 0.1.
 %
 %   AUTHOR
 %   ------
@@ -50,8 +52,9 @@ function settings = IterationSettings()
     settings.MaxIter = 100;     % Maximum iterations for outer algorithm
 
     %% Simulation configuration
-    settings.Nagents = 5000;    % Number of simulated agents
-    settings.T       = 100;     % Total simulated time periods
-    settings.burn    = 50;      % Burn-in periods removed from statistics
+    settings.Nagents          = 5000;   % Number of simulated agents
+    settings.T                = 100;    % Total simulated time periods
+    settings.burn             = 50;     % Burn-in periods removed from statistics
+    settings.T_decline_A_VEN  = 10;     % Horizon (in periods) for Venezuela productivity decline
 
 end
