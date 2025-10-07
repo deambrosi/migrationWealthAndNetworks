@@ -65,12 +65,12 @@ function params = SetParameters(dims, x)
 
     %% Location-specific features
     params.A       = ones(dims.N,1);         % Productivity by location (wage shifters)
-    params.A(1)    = 0.2; 
+    params.A(1)    = 0.1; 
     params.B       = ones(dims.N, 1);     % Amenities by location
     params.B(1)    = 0.1;    
 
     % Skill premia: 
-    params.theta_s =    [0.2, 0.3;
+    params.theta_s =    [0.5, 0.5;
                         0.85, 1.1;
                         1, 1.25;
                         1.94, 3.42;
@@ -84,14 +84,14 @@ function params = SetParameters(dims, x)
     params.bbi     = 0.2 * ones(dims.N, 1);  % Unemployment income (N×1)
 
     % Job-finding probabilities (endpoints at ψ=0 and ψ=1)
-    f_psi_0        = [0.5;
+    f_psi_0        = [0.001;
                       0.04;
                       0.06;
                       0.12;
                       0.12;
                       0.12];
     
-    f_psi_1        =  [0.5;
+    f_psi_1        =  [0.10;
                       0.10;
                       0.12;
                       0.24;
@@ -124,8 +124,8 @@ function params = SetParameters(dims, x)
     params.nnu    = 0.1;   % Scale of i.i.d. taste shocks (logit)
 
     %% Help mechanics (network effects)
-    params.aalpha = 0.6;   % Fractional migration cost when helped
-    params.ggamma = 1.5;     % Elasticity of help probability
+    params.aalpha = 0.7;   % Fractional migration cost when helped
+    params.ggamma = 0.4;     % Elasticity of help probability
     params.cchi   = 0.02;  % Network erosion probability outside Venezuela
 
     %% Calibration constant

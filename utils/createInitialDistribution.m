@@ -48,8 +48,8 @@ function m0 = createInitialDistribution(dims, settings)
     % Built-in defaults (can be overwritten via settings.initialDist)
     initDefaults = struct( ...
         'shareSkilled',            0.20, ...   % Share of high-skill agents
-        'wealthDecayLowSkill',     0.65, ...   % Higher value => more mass at low wealth
-        'wealthDecayHighSkill',    0.40);      % Lower value => flatter wealth distribution
+        'wealthDecayLowSkill',     0.00, ...   % Higher value => more mass at low wealth
+        'wealthDecayHighSkill',    0.00);      % Lower value => flatter wealth distribution
 
     if isfield(settings, 'initialDist') && isstruct(settings.initialDist)
         userParams = settings.initialDist;

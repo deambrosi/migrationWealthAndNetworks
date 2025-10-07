@@ -47,7 +47,7 @@ function dims = setDimensionParam()
     dims.H  = 2 ^ dims.N;       % # of possible help-offer combinations
 
     % Asset grids
-    dims.Na = 25;               % Coarse asset grid size (on agrid)
+    dims.Na = 50;               % Coarse asset grid size (on agrid)
     dims.na = 5000;             % Fine  asset grid size (on ahgrid)
 
 end
