@@ -26,6 +26,9 @@ function out = fastSimulatedMoments(paramOverrides, opt)
 %         .cohorts        cohort-specific outcomes at requested horizons
 %         .agentData      simulated trajectories (truncated to used quarters)
 %         .flowLog        migration flow diagnostics used for moments
+%         .M_total        total migrant shares by location over quarters
+%         .M_network      networked migrant shares by location over quarters
+%         .M              alias for .M_total (requested convenience field)
 %
 %   The model is quarterly; annual statistics aggregate four consecutive
 %   quarters. Requested cohort statistics evaluate outcomes at specific years
@@ -87,20 +90,8 @@ function out = fastSimulatedMoments(paramOverrides, opt)
     %% 3) Simulation with stationary no-help policies ---------------------------
     m0 = createInitialDistribution(dims, settings);
 
-    G_noHelp = params.G0;
-    if size(G_noHelp, 2) == 1
-        G_dist = repmat(G_noHelp, 1, settings.T);
-    else
-        G_dist = G_noHelp;
-        if size(G_dist, 2) < settings.T
-            G_dist(:, end+1:settings.T) = repmat(G_dist(:, end), 1, settings.T - size(G_dist, 2));
-        elseif size(G_dist, 2) > settings.T
-            G_dist = G_dist(:, 1:settings.T);
-        end
-    end
-
-    [~, ~, agentDataFull, flowLogFull] = simulateAgents( ...
-        m0, pol_nh, G_dist, dims, params, grids, matrices, settings);
+    [M_total, M_network, agentDataFull, flowLogFull] = simulateAgentsUpdatingG( ...
+        m0, pol_nh, dims, params, grids, matrices, settings);
 
     %% 4) Aggregate quarterly data into annual moments --------------------------
     Tused = floor(settings.T / quartersPerYear) * quartersPerYear;
@@ -125,9 +116,283 @@ function out = fastSimulatedMoments(paramOverrides, opt)
     out.moments      = moments;
     out.agentData    = agentData;
     out.flowLog      = flowLog;
+    out.M_total      = M_total;
+    out.M_network    = M_network;
+    out.M            = M_total;
 end
 
 %% Local helpers ================================================================
+function [M_history, MIN_history, agentData, flowLog] = simulateAgentsUpdatingG( ...
+        m0, pol, dims, params, grids, matrices, settings)
+
+    T       = settings.T;
+    Nagents = settings.Nagents;
+    N       = dims.N;
+
+    logFlows = nargout >= 4;
+
+    % Ensure policy paths are cell arrays over time
+    if ~iscell(pol.a)
+        pol.a   = repmat({pol.a},  T-1, 1);
+        pol.an  = repmat({pol.an}, T-1, 1);
+        pol.mu  = repmat({pol.mu}, T-1, 1);
+        pol.mun = repmat({pol.mun},T-1, 1);
+    end
+
+    P_local   = matrices.P;
+    mig_costs = matrices.mig_costs;
+
+    if isfield(matrices, 'Hbin')
+        Hbin = matrices.Hbin;
+    else
+        Hbin = dec2bin(0:(size(mig_costs, 3) - 1), N) - '0';
+    end
+    numHelpStates = size(Hbin, 1);
+
+    skillVec = double(reshape([m0.skill], [], 1));
+    locCurr  = double(reshape([m0.location], [], 1));
+    weaCurr  = double(reshape([m0.wealth], [], 1));
+    staCurr  = double(reshape([m0.state], [], 1));
+    netCurr  = double(reshape([m0.network], [], 1));
+
+    if numel(skillVec) ~= Nagents
+        error('simulateAgentsUpdatingG:badInitialDistribution', ...
+            'Initial distribution length (%d) does not match Nagents (%d).', ...
+            numel(skillVec), Nagents);
+    end
+
+    locationTraj = zeros(Nagents, T, 'uint16');
+    wealthTraj   = zeros(Nagents, T, 'uint16');
+    stateTraj    = zeros(Nagents, T, 'uint16');
+    networkTraj  = zeros(Nagents, T, 'uint8');
+    skillTraj    = uint16(skillVec);
+
+    locationTraj(:, 1) = uint16(locCurr);
+    wealthTraj(:, 1)   = uint16(weaCurr);
+    stateTraj(:, 1)    = uint16(staCurr);
+    networkTraj(:, 1)  = uint8(netCurr);
+
+    if logFlows
+        helpUsedTraj   = false(Nagents, T);
+        directVzlaTraj = false(Nagents, T);
+    else
+        helpUsedTraj   = [];
+        directVzlaTraj = [];
+    end
+
+    ggamma = 1;
+    if isfield(params, 'ggamma') && ~isempty(params.ggamma)
+        ggamma = params.ggamma;
+    end
+
+    numAh = numel(grids.ahgrid);
+    numA  = numel(grids.agrid);
+
+    for t = 1:(T-1)
+        % --- Compute help distribution from current network masses ---
+        netCounts = accumarray(locCurr, netCurr, [N, 1], @sum, 0);
+
+        networkShare = zeros(N, 1);
+        if Nagents > 0
+            networkShare = netCounts / Nagents;
+        end
+        networkShare = max(0, min(1, networkShare));
+
+        piRow = (networkShare.').^ggamma;  % 1 × N
+        piRow = max(0, min(1, piRow));
+
+        piTerm       = bsxfun(@power, piRow, Hbin);
+        oneMinusTerm = bsxfun(@power, 1 - piRow, 1 - Hbin);
+        helpWeights  = prod(piTerm .* oneMinusTerm, 2);
+
+        nextLoc = zeros(Nagents, 1);
+        nextWea = zeros(Nagents, 1);
+        nextSta = zeros(Nagents, 1);
+        nextNet = zeros(Nagents, 1);
+
+        if logFlows
+            helpCol   = helpUsedTraj(:, t+1);
+            directCol = directVzlaTraj(:, t+1);
+        end
+
+        pol_a_t   = pol.a{t};
+        pol_an_t  = pol.an{t};
+        pol_mu_t  = pol.mu{t};
+        pol_mun_t = pol.mun{t};
+        helpDim_t = size(pol_mun_t, 6);
+        if isempty(helpDim_t) || helpDim_t == 0
+            helpDim_t = numHelpStates;
+        end
+        activeHelpDim = min(max(1, helpDim_t), numHelpStates);
+
+        effectiveWeights = helpWeights(1:activeHelpDim);
+        sumWeights = sum(effectiveWeights);
+        if ~(sumWeights > 0) || ~isfinite(sumWeights)
+            effectiveWeights = zeros(activeHelpDim, 1);
+            effectiveWeights(1) = 1;
+            sumWeights = 1;
+        end
+        effectiveDist = effectiveWeights / sumWeights;
+        helpCdf = cumsum(effectiveDist);
+
+        for agentIdx = 1:Nagents
+            ski = skillVec(agentIdx);
+            loc = locCurr(agentIdx);
+            wea = weaCurr(agentIdx);
+            sta = staCurr(agentIdx);
+            net = netCurr(agentIdx);
+
+            % Asset policy (fine grid index)
+            if net >= 1
+                a_fine = pol_an_t(ski, sta, wea, loc);
+            else
+                a_fine = pol_a_t(ski, sta, wea, loc);
+            end
+            a_fine = max(1, min(a_fine, numAh));
+            a_fine = double(uint32(a_fine));
+
+            [~, weaFineIdx] = min(abs(grids.agrid - grids.ahgrid(a_fine)));
+            weaFineIdx = max(1, min(weaFineIdx, numA));
+            nextWeaIdx = double(weaFineIdx);
+
+            % Migration decision and help draw
+            if net >= 1
+                rHelp = rand();
+                h_idx = find(helpCdf >= rHelp, 1, 'first');
+                if isempty(h_idx)
+                    h_idx = 1;
+                end
+                h_idx = min(max(1, h_idx), activeHelpDim);
+                migProb = squeeze(pol_mun_t(ski, sta, nextWeaIdx, loc, :, h_idx));
+            else
+                h_idx = 1;
+                migProb = squeeze(pol_mu_t(ski, sta, nextWeaIdx, loc, :));
+            end
+
+            if ~isvector(migProb) || numel(migProb) ~= N
+                migProb = zeros(N, 1);
+                migProb(loc) = 1;
+            end
+            migProb = double(migProb(:));
+            probSum = sum(migProb);
+            if ~(probSum > 0) || ~isfinite(probSum)
+                migProb = zeros(N, 1);
+                migProb(loc) = 1;
+            else
+                migProb = migProb / probSum;
+            end
+
+            cdfMig = cumsum(migProb);
+            rMig   = rand();
+            nextLocIdx = find(cdfMig >= rMig, 1, 'first');
+            if isempty(nextLocIdx)
+                [~, nextLocIdx] = max(migProb);
+            end
+            nextLocIdx = max(1, min(N, nextLocIdx));
+
+            moved = (nextLocIdx ~= loc);
+            helpFlag   = false;
+            directFlag = false;
+
+            if moved
+                if logFlows && ~isempty(Hbin)
+                    helpFlag = (net >= 1) && (Hbin(h_idx, nextLocIdx) == 1);
+                end
+                directFlag = (loc == 1);
+
+                migCost = mig_costs(loc, nextLocIdx, min(max(1, h_idx), size(mig_costs, 3)));
+                newAssets = grids.agrid(nextWeaIdx) - migCost;
+                [~, newWeaIdx] = min(abs(grids.agrid - newAssets));
+                newWeaIdx = max(1, min(newWeaIdx, numA));
+                nextWeaIdx = double(newWeaIdx);
+                sta = 1;
+            else
+                P_row = squeeze(P_local(ski, sta, :, loc));
+                rowSum = sum(P_row);
+                if rowSum > 0 && isfinite(rowSum)
+                    P_row = P_row / rowSum;
+                    cdfState = cumsum(P_row);
+                    rState   = rand();
+                    sta_next = find(cdfState >= rState, 1, 'first');
+                    if isempty(sta_next)
+                        sta_next = sta;
+                    end
+                    sta = sta_next;
+                end
+            end
+
+            if net >= 1 && nextLocIdx ~= 1
+                chi = params.cchi;
+                if isscalar(chi)
+                    pLose = chi;
+                elseif isequal(size(chi), [dims.S, dims.N])
+                    pLose = chi(ski, nextLocIdx);
+                elseif isequal(size(chi), [1, dims.N])
+                    pLose = chi(nextLocIdx);
+                else
+                    pLose = chi;
+                end
+                if rand() < pLose
+                    net = 0;
+                end
+            end
+
+            nextLoc(agentIdx) = nextLocIdx;
+            nextWea(agentIdx) = nextWeaIdx;
+            nextSta(agentIdx) = sta;
+            nextNet(agentIdx) = net;
+
+            if logFlows && moved
+                helpCol(agentIdx)   = helpFlag;
+                directCol(agentIdx) = directFlag;
+            end
+        end
+
+        locCurr = nextLoc;
+        weaCurr = nextWea;
+        staCurr = nextSta;
+        netCurr = nextNet;
+
+        locationTraj(:, t+1) = uint16(locCurr);
+        wealthTraj(:, t+1)   = uint16(weaCurr);
+        stateTraj(:, t+1)    = uint16(staCurr);
+        networkTraj(:, t+1)  = uint8(netCurr);
+
+        if logFlows
+            helpUsedTraj(:, t+1)   = helpCol;
+            directVzlaTraj(:, t+1) = directCol;
+        end
+    end
+
+    M_history   = zeros(N, T);
+    MIN_history = zeros(N, T);
+    for t = 1:T
+        locs = double(locationTraj(:, t));
+        nets = double(networkTraj(:, t));
+
+        M_history(:, t) = accumarray(locs, 1, [N, 1], @sum, 0) / Nagents;
+        netMask = (nets == 1);
+        if any(netMask)
+            MIN_history(:, t) = accumarray(locs(netMask), 1, [N, 1], @sum, 0) / Nagents;
+        else
+            MIN_history(:, t) = 0;
+        end
+    end
+
+    agentData.location = locationTraj;
+    agentData.wealth   = wealthTraj;
+    agentData.state    = stateTraj;
+    agentData.network  = networkTraj;
+    agentData.skill    = skillTraj;
+
+    if logFlows
+        flowLog.helpUsed       = helpUsedTraj;
+        flowLog.directFromVzla = directVzlaTraj;
+    else
+        flowLog = [];
+    end
+end
+
 function moments = computeRequestedMoments(agentData, flowLog, dims, params, grids, quartersPerYear)
 
     locationTraj = double(agentData.location);
