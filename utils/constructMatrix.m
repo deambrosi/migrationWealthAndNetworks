@@ -66,7 +66,7 @@ function matrices = constructMatrix(dims, params, grids, indexes)
     % Period utility from consumption (log utility with amenity weight)
     Ue          = zeros(size(cons));
     feasible    = cons > 0;
-    Ue(feasible)  = amenity_weight(feasible) .* log(cons(feasible));
+    Ue(feasible)  = amenity_weight(feasible) .* cons(feasible).^(0.5);
     Ue(~feasible) = -realmax;   % penalize infeasible consumption
 
     %% 2. After-migration wealth -------------------------------------------------

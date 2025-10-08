@@ -85,14 +85,14 @@ function params = SetParameters(dims, x)
     params.bbi     = 0.2 * ones(dims.N, 1);  % Unemployment income (N×1)
 
     % Job-finding probabilities (endpoints at ψ=0 and ψ=1)
-    f_psi_0        = [0.001;
+    f_psi_0        = [1;
                       0.04;
                       0.06;
                       0.12;
                       0.12;
                       0.12];
     
-    f_psi_1        =  [0.10;
+    f_psi_1        =  [1;
                       0.10;
                       0.12;
                       0.24;
@@ -106,6 +106,7 @@ function params = SetParameters(dims, x)
 
     % Job-separation probabilities (endpoints at ψ=0 and ψ=1)
     g_base         = [0.02*ones(dims.N,1), 0.02*ones(dims.N,1)];  % N×2
+    g_base(1,:)    = [0,0]; 
     g_base         = permute(g_base, [3,1,2]);                   % 1×N×2
     params.g       = repmat(g_base, [dims.S, 1, 1]);             % S×N×2
 
