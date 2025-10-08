@@ -16,6 +16,10 @@ function out = fastSimulatedMoments(paramOverrides, opt)
 %                    .years    number of simulated years   (default: 7)
 %                    .quarters total quarters to simulate  (overrides .years)
 %                    .seed     RNG seed for reproducibility
+%                    .A1Transition 2-element vector [start end] for A(1) path (first 12 quarters)
+%                    .B1Transition 2-element vector [start end] for B(1) path (first 12 quarters)
+%                    .A1_start/.A1_end scalars for start/end when Transition not supplied
+%                    .B1_start/.B1_end scalars for start/end when Transition not supplied
 %
 %   OUTPUT
 %   ------
@@ -79,19 +83,118 @@ function out = fastSimulatedMoments(paramOverrides, opt)
         settings.seed = opt.seed;
     end
 
-    params           = SetParameters(dims, paramOverrides);
+    baseParams       = SetParameters(dims, paramOverrides);
     [grids, indexes] = setGridsAndIndices(dims);
-    matrices         = constructMatrix(dims, params, grids, indexes);
-    params.P         = matrices.P;
 
-    %% 2) Steady-state policies under no help -----------------------------------
-    [vf_nh, pol_nh] = noHelpEqm(dims, params, grids, indexes, matrices, settings); %#ok<NASGU>
+    %% 2) Time-varying policies for the first 12 periods ------------------------
+    params = baseParams;
 
-    %% 3) Simulation with stationary no-help policies ---------------------------
+    transitionPeriods = max(1, min(12, settings.T - 1));
+
+    A1_start = params.A(1);
+    A1_end   = params.A(1);
+    if isfield(opt, 'A1Transition') && numel(opt.A1Transition) >= 2
+        A1_start = opt.A1Transition(1);
+        A1_end   = opt.A1Transition(end);
+    else
+        if isfield(opt, 'A1_start') && ~isempty(opt.A1_start)
+            A1_start = opt.A1_start;
+        end
+        if isfield(opt, 'A1_end') && ~isempty(opt.A1_end)
+            A1_end = opt.A1_end;
+        end
+    end
+
+    B1_start = params.B(1);
+    B1_end   = params.B(1);
+    if isfield(opt, 'B1Transition') && numel(opt.B1Transition) >= 2
+        B1_start = opt.B1Transition(1);
+        B1_end   = opt.B1Transition(end);
+    else
+        if isfield(opt, 'B1_start') && ~isempty(opt.B1_start)
+            B1_start = opt.B1_start;
+        end
+        if isfield(opt, 'B1_end') && ~isempty(opt.B1_end)
+            B1_end = opt.B1_end;
+        end
+    end
+
+    if transitionPeriods == 1
+        A_schedule = A1_start;
+        B_schedule = B1_start;
+    else
+        A_schedule = linspace(A1_start, A1_end, transitionPeriods);
+        B_schedule = linspace(B1_start, B1_end, transitionPeriods);
+    end
+
+    policySchedule = cell(transitionPeriods, 1);
+    matrices = [];
+
+    for tt = 1:transitionPeriods
+        params_t      = baseParams;
+        params_t.A(1) = A_schedule(tt);
+        params_t.B(1) = B_schedule(tt);
+
+        matrices_t    = constructMatrix(dims, params_t, grids, indexes);
+        params_t.P    = matrices_t.P;
+
+        [~, pol_t] = noHelpEqm(dims, params_t, grids, indexes, matrices_t, settings);
+        policySchedule{tt} = pol_t;
+
+        if tt == transitionPeriods
+            params   = params_t;
+            matrices = matrices_t;
+        end
+    end
+
+    if isempty(matrices)
+        matrices = constructMatrix(dims, params, grids, indexes);
+        params.P = matrices.P;
+        [~, pol_stationary] = noHelpEqm(dims, params, grids, indexes, matrices, settings); %#ok<NASGU>
+        policySchedule{1} = pol_stationary;
+    end
+
+    params.P = matrices.P;
+
+    numDecisionPeriods = max(settings.T - 1, 0);
+    policyPath = struct();
+    policyFields = {'a', 'an', 'mu', 'mun'};
+    for f = 1:numel(policyFields)
+        policyPath.(policyFields{f}) = cell(numDecisionPeriods, 1);
+    end
+
+    for tt = 1:numDecisionPeriods
+        idx = min(tt, transitionPeriods);
+        pol_t = policySchedule{idx};
+        for f = 1:numel(policyFields)
+            policyPath.(policyFields{f}){tt} = pol_t.(policyFields{f});
+        end
+    end
+
+    params.A1_transition = [A1_start; A1_end];
+    params.B1_transition = [B1_start; B1_end];
+    params.A1_schedule   = A_schedule(:);
+    params.B1_schedule   = B_schedule(:);
+    params.A_timePath  = repmat(params.A(:), 1, settings.T);
+    params.B_timePath  = repmat(params.B(:), 1, settings.T);
+    horizonForPath = min(settings.T, transitionPeriods);
+    for tt = 1:horizonForPath
+        params.A_timePath(:, tt) = params.A(:);
+        params.B_timePath(:, tt) = params.B(:);
+        params.A_timePath(1, tt) = A_schedule(min(tt, numel(A_schedule)));
+        params.B_timePath(1, tt) = B_schedule(min(tt, numel(B_schedule)));
+    end
+
+    if settings.T > transitionPeriods
+        params.A_timePath(:, transitionPeriods+1:end) = repmat(params.A(:), 1, settings.T - transitionPeriods);
+        params.B_timePath(:, transitionPeriods+1:end) = repmat(params.B(:), 1, settings.T - transitionPeriods);
+    end
+
+    %% 3) Simulation with time-varying no-help policies -------------------------
     m0 = createInitialDistribution(dims, settings);
 
     [M_total, M_network, agentDataFull, flowLogFull] = simulateAgentsUpdatingG( ...
-        m0, pol_nh, dims, params, grids, matrices, settings);
+        m0, policyPath, dims, params, grids, matrices, settings);
 
     %% 4) Aggregate quarterly data into annual moments --------------------------
     Tused = floor(settings.T / quartersPerYear) * quartersPerYear;
@@ -138,6 +241,21 @@ function [M_history, MIN_history, agentData, flowLog] = simulateAgentsUpdatingG(
         pol.mu  = repmat({pol.mu}, T-1, 1);
         pol.mun = repmat({pol.mun},T-1, 1);
     end
+
+    if isfield(params, 'A_timePath') && ~isempty(params.A_timePath)
+        A_timePath = params.A_timePath;
+    else
+        A_timePath = [];
+    end
+    if isfield(params, 'B_timePath') && ~isempty(params.B_timePath)
+        B_timePath = params.B_timePath;
+    else
+        B_timePath = [];
+    end
+    rowsA = min(size(A_timePath, 1), numel(params.A));
+    rowsB = min(size(B_timePath, 1), numel(params.B));
+    colsA = size(A_timePath, 2);
+    colsB = size(B_timePath, 2);
 
     P_local   = matrices.P;
     mig_costs = matrices.mig_costs;
@@ -189,6 +307,15 @@ function [M_history, MIN_history, agentData, flowLog] = simulateAgentsUpdatingG(
     numA  = numel(grids.agrid);
 
     for t = 1:(T-1)
+        if ~isempty(A_timePath)
+            colA = min(t, colsA);
+            params.A(1:rowsA) = A_timePath(1:rowsA, colA);
+        end
+        if ~isempty(B_timePath)
+            colB = min(t, colsB);
+            params.B(1:rowsB) = B_timePath(1:rowsB, colB);
+        end
+
         % --- Compute help distribution from current network masses ---
         netCounts = accumarray(locCurr, netCurr, [N, 1], @sum, 0);
 
@@ -404,7 +531,14 @@ function moments = computeRequestedMoments(agentData, flowLog, dims, params, gri
     numYears = floor(T / quartersPerYear);
 
     skillMat   = repmat(skillVec, 1, T);
-    A_vals     = params.A(locationTraj);
+    if isfield(params, 'A_timePath') && ~isempty(params.A_timePath) && ...
+            size(params.A_timePath, 1) == dims.N && size(params.A_timePath, 2) >= T
+        colIdx = repmat(1:T, Nagents, 1);
+        linIdx = sub2ind([dims.N, size(params.A_timePath, 2)], locationTraj, colIdx);
+        A_vals = reshape(params.A_timePath(linIdx), [Nagents, T]);
+    else
+        A_vals = params.A(locationTraj);
+    end
     theta_idx  = sub2ind([dims.S, dims.N], skillMat, locationTraj);
     theta_vals = params.theta_s(theta_idx);
 
