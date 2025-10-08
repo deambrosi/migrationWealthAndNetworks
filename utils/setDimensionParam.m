@@ -38,7 +38,7 @@ function dims = setDimensionParam()
     % -----------------------------
     % Core model dimension settings
     % -----------------------------
-    dims.S  = 2;                % Number of skill types
+    dims.S  = 1;                % Number of skill types
     dims.N  = 6;                % Number of locations
     dims.k  = 5;                % # of ψ (integration) rungs per employment state
 

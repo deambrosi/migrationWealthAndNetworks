@@ -64,18 +64,19 @@ function params = SetParameters(dims, x)
     params.phiH    = 0.3;        % Elasticity of utility w.r.t. ψ
 
     %% Location-specific features
-    params.A       = ones(dims.N,1);         % Productivity by location (wage shifters)
+    params.A       = [0.8;
+                      1;
+                      2;
+                      3;
+                      5;
+                      7];      % Productivity by location (wage shifters)
+    
     params.A(1)    = 0.1; 
     params.B       = ones(dims.N, 1);     % Amenities by location
-    params.B(1)    = 0.1;    
+    params.B(1)    = 0.3;    
 
     % Skill premia: 
-    params.theta_s =    [0.5, 0.5;
-                        0.85, 1.1;
-                        1, 1.25;
-                        1.94, 3.42;
-                        2.51, 4.07;
-                        3.08, 4.73;];
+    params.theta_s =    ones(dims.N,dims.S);
 
 
     params.theta_k = 0.5;                   % Returns to human capital in wages
@@ -113,14 +114,14 @@ function params = SetParameters(dims, x)
 
     %% Migration & choice frictions
     % Base migration cost matrix (encourages stepping-stone migration).
-    params.ttau = [ 0   2   4   7   11  15;  % from 1 -> {2,3,4,5,6}
+    params.ttau = [ 0   3   4   7   11  15;  % from 1 -> {2,3,4,5,6}
                     2   0   3   6   10  14;  % from 2 -> {1,3,4,5,6}
                     4   3   0   4   8   12;  % from 3 -> {1,2,4,5,6}
                     7   6   4   0   5   9 ;  % from 4 -> {1,2,3,5,6}
                     11 10  8   5   0   5 ;  % from 5 -> {1,2,3,4,6}
                     15 14 12  9   5   0  ]; % from 6 -> {1,2,3,4,5}
     
-    params.ttau = params.ttau;
+    params.ttau = 1.1.*params.ttau;
     params.nnu    = 0.1;   % Scale of i.i.d. taste shocks (logit)
 
     %% Help mechanics (network effects)
