@@ -16,8 +16,9 @@ function out = fastSimulatedMoments(paramOverrides, opt)
 %                    .years    number of simulated years   (default: 7)
 %                    .quarters total quarters to simulate  (overrides .years)
 %                    .seed     RNG seed for reproducibility
-%                    .A1Transition 2-element vector [start end] for A(1) path (first 12 quarters)
-%                    .B1Transition 2-element vector [start end] for B(1) path (first 12 quarters)
+%                    .TransitionPeriods number of quarters for A(1)/B(1) interpolation (default: 12)
+%                    .A1Transition 2-element vector [start end] for A(1) path (first TransitionPeriods quarters)
+%                    .B1Transition 2-element vector [start end] for B(1) path (first TransitionPeriods quarters)
 %                    .A1_start/.A1_end scalars for start/end when Transition not supplied
 %                    .B1_start/.B1_end scalars for start/end when Transition not supplied
 %
@@ -86,10 +87,18 @@ function out = fastSimulatedMoments(paramOverrides, opt)
     baseParams       = SetParameters(dims, paramOverrides);
     [grids, indexes] = setGridsAndIndices(dims);
 
-    %% 2) Time-varying policies for the first 12 periods ------------------------
+    %% 2) Time-varying policies for the early transition periods ----------------
     params = baseParams;
 
-    transitionPeriods = max(1, min(12, settings.T - 1));
+    transitionDefault = 12;
+    if isfield(opt, 'TransitionPeriods') && ~isempty(opt.TransitionPeriods)
+        requestedTransitionPeriods = max(1, round(opt.TransitionPeriods));
+    else
+        requestedTransitionPeriods = transitionDefault;
+    end
+
+    transitionPeriods = max(1, min(requestedTransitionPeriods, max(settings.T - 1, 1)));
+    settings.TransitionPeriods = transitionPeriods;
 
     A1_start = params.A(1);
     A1_end   = params.A(1);
@@ -173,6 +182,7 @@ function out = fastSimulatedMoments(paramOverrides, opt)
 
     params.A1_transition = [A1_start; A1_end];
     params.B1_transition = [B1_start; B1_end];
+    params.TransitionPeriods = transitionPeriods;
     params.A1_schedule   = A_schedule(:);
     params.B1_schedule   = B_schedule(:);
     params.A_timePath  = repmat(params.A(:), 1, settings.T);
