@@ -64,16 +64,15 @@ function params = SetParameters(dims, x)
     params.phiH    = 0.3;        % Elasticity of utility w.r.t. ψ
 
     %% Location-specific features
-    params.A       = [0.8;
-                      1;
+    params.A       = [1;
                       2;
-                      3;
-                      5;
-                      7];      % Productivity by location (wage shifters)
+                      4;
+                      6;
+                      8;
+                      10];      % Productivity by location (wage shifters)
     
-    params.A(1)    = 0.1; 
     params.B       = ones(dims.N, 1);     % Amenities by location
-    params.B(1)    = 0.3;    
+    params.B(1)    = 0.01;    
 
     % Skill premia: 
     params.theta_s =    ones(dims.N,dims.S);
@@ -82,7 +81,7 @@ function params = SetParameters(dims, x)
     params.theta_k = 0.5;                   % Returns to human capital in wages
 
     % Income flows
-    params.bbi     = 0.2 * ones(dims.N, 1);  % Unemployment income (N×1)
+    params.bbi     = 0.8 * ones(dims.N, 1);  % Unemployment income (N×1)
 
     % Job-finding probabilities (endpoints at ψ=0 and ψ=1)
     f_psi_0        = [1;
@@ -115,9 +114,9 @@ function params = SetParameters(dims, x)
 
     %% Migration & choice frictions
     % Base migration cost matrix (encourages stepping-stone migration).
-    params.ttau = [ 0   3   4   7   11  15;  % from 1 -> {2,3,4,5,6}
-                    2   0   3   6   10  14;  % from 2 -> {1,3,4,5,6}
-                    4   3   0   4   8   12;  % from 3 -> {1,2,4,5,6}
+    params.ttau = [ 0   1.2   4   7   11  15;  % from 1 -> {2,3,4,5,6}
+                    1.2   0   2   6   10  14;  % from 2 -> {1,3,4,5,6}
+                    4   2   0   4   8   12;  % from 3 -> {1,2,4,5,6}
                     7   6   4   0   5   9 ;  % from 4 -> {1,2,3,5,6}
                     11 10  8   5   0   5 ;  % from 5 -> {1,2,3,4,6}
                     15 14 12  9   5   0  ]; % from 6 -> {1,2,3,4,5}
