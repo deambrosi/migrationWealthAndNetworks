@@ -14,7 +14,7 @@ function [pol_eqm, M_eqm, it_count] = solveDynamicEquilibrium(M0, vf_terminal, m
 %   vf_terminal : struct with steady‑state/terminal value functions at T (.V, .Vn, .R, .Rn).
 %   m0          : [Nagents × 1] array of agent structs (initial conditions).
 %   dims        : struct with model dimensions (S, K, Na, N, H, …).
-%   params      : struct with parameters (.ggamma, .cchi, etc.).
+%   params      : struct with parameters (.ggamma, .cchi, A_timePath, etc.).
 %   grids       : struct with grids (.agrid, .ahgrid, …).
 %   indexes     : struct with indexing helpers.
 %   matrices    : struct with precomputed matrices (.Ue, .a_prime, .P, …).

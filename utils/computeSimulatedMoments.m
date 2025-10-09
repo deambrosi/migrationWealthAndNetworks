@@ -27,7 +27,15 @@ function mom = computeSimulatedMoments(agentData, M_total, M_network, dims, para
     Nagents   = size(locTraj, 1);
     T         = size(locTraj, 2);
 
-    A_vals      = params.A(locTraj);
+    A_vals = params.A(locTraj);
+    if isfield(params, 'A_timePath') && ~isempty(params.A_timePath) && ...
+            size(params.A_timePath, 1) >= dims.N
+        colsA  = size(params.A_timePath, 2);
+        colIdx = repmat(1:T, Nagents, 1);
+        colIdx(colIdx > colsA) = colsA;
+        linIdx = sub2ind([dims.N, colsA], locTraj, colIdx);
+        A_vals = reshape(params.A_timePath(linIdx), [Nagents, T]);
+    end
     
     % Build [Nagents x T] skill matrix to match locTraj
     skillMat   = repmat(skillVec, 1, T);

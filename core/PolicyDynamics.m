@@ -36,6 +36,9 @@ function [vf_path, pol_path] = PolicyDynamics(M1, vf_terminal, dims, params, gri
 %   • The boundary condition at T pins down continuation values at t = T-1.
 %   • Help probabilities are computed as G_t = computeG(M1(:,t), γ).
 %   • All shapes are consistent with updateValueAndPolicy.m and simulateAgents.m.
+%   • When params contains time paths (e.g., params.A_timePath), the routine
+%     refreshes MATRICES.Ue period-by-period so that value updates reflect the
+%     current productivity/amenity levels.
 %
 %   AUTHOR: Agustín Deambrosi
 %   LAST REVISED: September 2025
@@ -58,14 +61,49 @@ function [vf_path, pol_path] = PolicyDynamics(M1, vf_terminal, dims, params, gri
     % Terminal boundary condition
     vf_path{T} = vf_terminal;
 
+    % Flags for time-varying fundamentals
+    hasApath = isfield(params, 'A_timePath') && ~isempty(params.A_timePath);
+    hasBpath = isfield(params, 'B_timePath') && ~isempty(params.B_timePath);
+    if hasApath
+        rowsA = min(size(params.A_timePath, 1), numel(params.A));
+        colsA = size(params.A_timePath, 2);
+    else
+        rowsA = 0; colsA = 0; %#ok<NASGU>
+    end
+    if hasBpath
+        rowsB = min(size(params.B_timePath, 1), numel(params.B));
+        colsB = size(params.B_timePath, 2);
+    else
+        rowsB = 0; colsB = 0; %#ok<NASGU>
+    end
+
     %% 2) Backward induction: t = T-1 down to 1
     for t = T-1:-1:1
         % Help PMF for this period
         G_t = G_path(:, t);    % [H × 1]
 
         % Compute time-t value and policy given continuation at t+1
+        if hasApath || hasBpath
+            params_t = params;
+            matrices_t = matrices;
+
+            if hasApath
+                colA = min(t, colsA);
+                params_t.A(1:rowsA) = params.A_timePath(1:rowsA, colA);
+            end
+            if hasBpath
+                colB = min(t, colsB);
+                params_t.B(1:rowsB) = params.B_timePath(1:rowsB, colB);
+            end
+
+            matrices_t.Ue = computeUtilityMatrix(dims, params_t, grids, indexes);
+        else
+            params_t   = params;
+            matrices_t = matrices;
+        end
+
         [vf_t, pol_t] = updateValueAndPolicy( ...
-            vf_path{t+1}, dims, params, grids, indexes, matrices, G_t);
+            vf_path{t+1}, dims, params_t, grids, indexes, matrices_t, G_t);
 
         % Store results
         vf_path{t}   = vf_t;
