@@ -21,7 +21,8 @@ function [vf, pol] = updateValueAndPolicy(val, dims, params, grids, indexes, mat
 %   params   : struct with model parameters (bbeta, cchi, CONS, nnu, …)
 %   grids    : struct with grids (agrid, ahgrid, …)
 %   indexes  : struct with index arrays (II diagonal indices, etc.)
-%   matrices : struct with precomputed objects
+%   matrices : struct with precomputed objects (refresh MATRICES.Ue when
+%              fundamentals such as A_i or B_i vary over time)
 %       .Ue        [S × K × 1 × N × na] per-period utility on fine grid
 %       .a_prime   [S × K × Na × N × N × H] post-migration assets
 %       .P         [S × K × K × N] stay operator over (z,ψ)

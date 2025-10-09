@@ -44,30 +44,8 @@ function matrices = constructMatrix(dims, params, grids, indexes)
 % ======================================================================
 
     %% 1. Consumption and utility ------------------------------------------------
-    % Linear index to pick the right θ_s for each (skill, location)
-    idx_SN   = sub2ind([dims.S, dims.N], indexes.I_sp, indexes.I_Np);
-    theta_sn = params.theta_s(idx_SN);
-
-    % Income flow:
-    %   • Unemployed: b_i (location-specific benefit).
-    %   • Employed  : A_i * θ^s_i * (1+ψ)^(θ_k).
-    income = (2 - indexes.I_ep) .* params.bbi(indexes.I_Np) + ...
-             (indexes.I_ep - 1) .* params.A(indexes.I_Np) .* ...
-             theta_sn .* (1 + grids.psi(indexes.I_psip)).^(params.theta_k);
-    
-    % Consumption = gross return on assets + income − savings
-    cons = (1 / params.bbeta) .* grids.agrid(indexes.I_ap) + ...
-           income - grids.ahgrid(indexes.I_app);
-
-    % Amenity scaling: B_i × (1 + ξ·ψ)^(φH)
-    amenity_weight = params.B(indexes.I_Np) .* ...
-                     (1 + params.xi .* grids.psi(indexes.I_psip)).^(params.phiH);
-
-    % Period utility from consumption (log utility with amenity weight)
-    Ue          = zeros(size(cons));
-    feasible    = cons > 0;
-    Ue(feasible)  = amenity_weight(feasible) .* cons(feasible).^(0.5);
-    Ue(~feasible) = -realmax;   % penalize infeasible consumption
+    % Delegate to helper so it can be refreshed when A/B vary over time.
+    Ue = computeUtilityMatrix(dims, params, grids, indexes);
 
     %% 2. After-migration wealth -------------------------------------------------
     % Effective migration cost tensor: τ^{iℓ}(h), N×N×H
